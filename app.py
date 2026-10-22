@@ -1,102 +1,308 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 
-st.set_page_config(page_title="Strategic Radar Maroc", page_icon="📡", layout="wide")
+st.set_page_config(
+    page_title="Strategic Radar Maroc",
+    page_icon="🛰️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Données fictives pour démonstration académique uniquement.
-SECTEURS = {
-    "Agriculture": {"indicateur":"Indice du coût des intrants","valeurs":[100,102,101,106,114],"unite":"indice (base 100)","sens":"cout","solutions":[("Diversifier les fournisseurs","Comparer plusieurs fournisseurs pour réduire la dépendance."),("Optimiser les achats","Regrouper les commandes si cela est pertinent et négocier les conditions."),("Améliorer l'efficacité des intrants","Analyser les consommations et limiter les pertes.") ]},
-    "Industrie": {"indicateur":"Indice du coût de production","valeurs":[100,101,103,105,112],"unite":"indice (base 100)","sens":"cout","solutions":[("Auditer les coûts","Identifier les postes responsables de la hausse."),("Réduire les pertes de production","Examiner les rebuts, arrêts et consommations excessives."),("Planifier la maintenance","Limiter les arrêts imprévus et les coûts associés.") ]},
-    "Commerce international": {"indicateur":"Indice du coût des importations","valeurs":[100,104,103,108,116],"unite":"indice (base 100)","sens":"cout","solutions":[("Diversifier les fournisseurs","Comparer les marchés selon coût, délais et risques."),("Surveiller le taux de change","Évaluer l'exposition aux devises et définir des seuils d'alerte."),("Simuler les coûts d'approvisionnement","Tester l'effet de variations de prix, fret et change.") ]},
-    "Énergie": {"indicateur":"Indice du coût énergétique","valeurs":[100,103,105,104,115],"unite":"indice (base 100)","sens":"cout","solutions":[("Réaliser un audit énergétique","Identifier les équipements les plus consommateurs."),("Améliorer l'efficacité énergétique","Prioriser les actions à gain mesurable."),("Simuler plusieurs budgets","Comparer des scénarios de prix bas, central et élevé.") ]},
-    "Finance & banque": {"indicateur":"Indice de risque financier","valeurs":[35,38,37,44,52],"unite":"points","sens":"risque","solutions":[("Renforcer le suivi des risques","Suivre les indicateurs de liquidité, crédit et concentration."),("Tester des scénarios de stress","Évaluer la sensibilité à plusieurs chocs hypothétiques."),("Diversifier les expositions","Examiner les concentrations par client, secteur ou devise.") ]},
-    "Transport & logistique": {"indicateur":"Indice du coût logistique","valeurs":[100,102,105,111,118],"unite":"indice (base 100)","sens":"cout","solutions":[("Optimiser les itinéraires","Comparer trajets, délais et coûts."),("Comparer les prestataires","Évaluer le coût total et la fiabilité."),("Prévoir des alternatives","Identifier des itinéraires ou prestataires de secours.") ]},
-    "Tourisme": {"indicateur":"Indice de demande touristique","valeurs":[100,104,107,105,113],"unite":"indice (base 100)","sens":"demande","solutions":[("Adapter les offres à la saisonnalité","Ajuster les offres aux tendances observées."),("Diversifier les marchés émetteurs","Réduire la dépendance à un seul segment."),("Suivre les réservations","Comparer réservations, annulations et demandes.") ]},
-    "Technologie & numérique": {"indicateur":"Indice des coûts numériques","valeurs":[100,99,103,105,109],"unite":"indice (base 100)","sens":"cout","solutions":[("Auditer les abonnements","Repérer les outils redondants ou sous-utilisés."),("Comparer les fournisseurs","Comparer coûts, sécurité et conditions de sortie."),("Suivre les dépenses cloud","Mettre en place des indicateurs de consommation.") ]},
-    "Immobilier & construction": {"indicateur":"Indice du coût de construction","valeurs":[100,102,106,109,117],"unite":"indice (base 100)","sens":"cout","solutions":[("Actualiser les estimations","Réviser les hypothèses de prix et d'incertitude."),("Comparer les fournisseurs","Comparer coût total, qualité et délais."),("Prévoir une marge de contingence","Tester plusieurs scénarios budgétaires.") ]},
-    "Commerce & distribution": {"indicateur":"Indice des coûts commerciaux","valeurs":[100,101,104,107,113],"unite":"indice (base 100)","sens":"cout","solutions":[("Analyser les marges","Identifier les produits les plus exposés."),("Optimiser les stocks","Réduire ruptures et surstocks à partir des données."),("Négocier les conditions fournisseurs","Comparer prix, délais, volumes et paiement.") ]}
+# ---------- Visual identity ----------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+:root { --ink:#eaf0ff; --muted:#9aa9c5; --panel:#111d35; --line:rgba(160,184,225,.16); }
+html, body, [class*="css"] { font-family:'DM Sans',sans-serif; }
+.stApp {
+  background:
+    radial-gradient(circle at 80% 0%, rgba(34,211,238,.12), transparent 28%),
+    radial-gradient(circle at 0% 18%, rgba(99,102,241,.18), transparent 30%),
+    #081225;
+  color:var(--ink);
+}
+[data-testid="stHeader"] { background:rgba(8,18,37,.8); }
+[data-testid="stSidebar"] { background:linear-gradient(180deg,#101d36,#0b1428); border-right:1px solid var(--line); }
+[data-testid="stSidebar"] * { color:#eaf0ff; }
+.block-container { padding-top:1.4rem; padding-bottom:3rem; max-width:1440px; }
+h1,h2,h3 { font-family:'Manrope',sans-serif !important; letter-spacing:-.035em; color:#f4f7ff; }
+.hero {
+  padding:30px 30px 26px; border:1px solid rgba(125,211,252,.22); border-radius:24px;
+  background:linear-gradient(115deg,rgba(22,39,71,.97),rgba(12,27,51,.9) 58%,rgba(19,54,78,.8));
+  box-shadow:0 20px 60px rgba(0,0,0,.2); margin-bottom:22px; position:relative; overflow:hidden;
+}
+.hero:after { content:""; position:absolute; width:240px;height:240px;right:-55px;top:-95px;border:1px solid rgba(103,232,249,.22);border-radius:50%; box-shadow:0 0 0 28px rgba(103,232,249,.025),0 0 0 58px rgba(103,232,249,.025); }
+.eyebrow { color:#67e8f9; text-transform:uppercase; letter-spacing:.17em; font-size:.74rem; font-weight:700; }
+.hero-title { font-family:'Manrope',sans-serif; font-weight:800; font-size:clamp(2rem,4vw,3.45rem); line-height:1.04; color:#f7fbff; margin:.55rem 0 .75rem; }
+.hero-sub { max-width:760px; color:#b7c6df; font-size:1.02rem; line-height:1.7; }
+.pill { display:inline-block; border:1px solid rgba(103,232,249,.3); background:rgba(34,211,238,.08); color:#a5f3fc; padding:6px 11px; border-radius:999px; font-size:.76rem; margin:12px 6px 0 0; }
+.section-kicker { color:#67e8f9; text-transform:uppercase; letter-spacing:.13em; font-size:.72rem; font-weight:700; margin:1rem 0 .35rem; }
+.metric-card { background:linear-gradient(145deg,rgba(20,35,63,.98),rgba(13,25,46,.98)); border:1px solid var(--line); border-radius:18px; padding:18px 19px; min-height:130px; }
+.metric-label { color:#9fb0cd; font-size:.82rem; margin-bottom:9px; }
+.metric-value { color:#f4f7ff; font-family:'Manrope',sans-serif; font-size:1.85rem; font-weight:800; letter-spacing:-.04em; }
+.metric-note { color:#a5f3fc; font-size:.78rem; margin-top:5px; }
+.panel { background:rgba(15,28,51,.78); border:1px solid var(--line); border-radius:20px; padding:20px 22px; }
+.small-muted { color:#9aa9c5; font-size:.84rem; }
+div[data-testid="stSelectbox"] label, div[data-testid="stSlider"] label { color:#cbd8ee; }
+.stButton>button, .stDownloadButton>button { border-radius:11px; border:1px solid rgba(103,232,249,.3); background:linear-gradient(90deg,#0e7490,#2563eb); color:white; font-weight:700; }
+.stButton>button:hover, .stDownloadButton>button:hover { border-color:#67e8f9; color:white; }
+div[data-testid="stDataFrame"] { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+div[data-testid="stAlert"] { border-radius:14px; }
+hr { border-color:var(--line); }
+footer {visibility:hidden;}
+</style>
+""", unsafe_allow_html=True)
+
+# ---------- Demonstration data (clearly labelled) ----------
+DATA = {
+    "Agriculture": {"indicator":"Indice du coût des intrants", "values":[100,102,101,106,114], "unit":"indice (base 100)", "meaning":"Une hausse peut signaler une pression sur les coûts de production."},
+    "Industrie": {"indicator":"Indice d'activité industrielle", "values":[100,101,103,105,112], "unit":"indice (base 100)", "meaning":"Une progression peut refléter une activité plus soutenue, à confirmer par des données officielles."},
+    "Commerce international": {"indicator":"Indice des échanges", "values":[100,104,103,108,116], "unit":"indice (base 100)", "meaning":"Le mouvement mérite d'être comparé aux importations, exportations et soldes commerciaux."},
+    "Énergie": {"indicator":"Indice de pression énergétique", "values":[100,103,105,104,115], "unit":"indice (base 100)", "meaning":"Une variation rapide peut modifier les coûts des entreprises et des ménages."},
+    "Finance & banque": {"indicator":"Indice de volatilité simulé", "values":[35,38,37,44,52], "unit":"indice simulé", "meaning":"Une hausse de volatilité invite à examiner le contexte et l'exposition au risque."},
+    "Transport & logistique": {"indicator":"Indice de coûts logistiques", "values":[100,102,105,111,118], "unit":"indice (base 100)", "meaning":"La hausse peut signaler une pression sur l'approvisionnement ou les délais."},
+    "Tourisme": {"indicator":"Indice de demande touristique", "values":[100,104,107,105,113], "unit":"indice (base 100)", "meaning":"Une hausse de demande peut être positive; il faut aussi surveiller la capacité et la saisonnalité."},
+    "Technologie & digital": {"indicator":"Indice d'adoption digitale", "values":[100,99,103,105,109], "unit":"indice (base 100)", "meaning":"La tendance peut aider à repérer des opportunités de transformation numérique."},
+    "Immobilier & construction": {"indicator":"Indice d'activité immobilière", "values":[100,102,106,109,117], "unit":"indice (base 100)", "meaning":"À mettre en perspective avec les taux, les prix et le volume des transactions."},
+    "Commerce & distribution": {"indicator":"Indice de coûts de distribution", "values":[100,101,104,107,113], "unit":"indice (base 100)", "meaning":"Une progression peut peser sur les marges et les prix finaux."},
+}
+SOLUTIONS = {
+    "Agriculture": [
+        ("Diversifier les fournisseurs", "Comparer plusieurs fournisseurs et sécuriser les intrants critiques.", "Suivre le coût moyen d'achat et la part d'approvisionnement par fournisseur."),
+        ("Optimiser les stocks", "Identifier les intrants prioritaires et définir un stock de sécurité adapté.", "Suivre les jours de couverture et les pertes de stock."),
+        ("Revoir le calendrier d'achat", "Comparer les périodes d'achat et négocier des contrats-cadres lorsque c'est pertinent.", "Suivre le prix d'achat et l'écart au budget.")
+    ],
+    "Industrie": [
+        ("Améliorer l'efficacité opérationnelle", "Analyser les postes de coûts et les pertes de production les plus importants.", "Suivre le coût unitaire et le taux de rebut."),
+        ("Sécuriser les approvisionnements", "Évaluer les fournisseurs critiques et prévoir des solutions de remplacement.", "Suivre les retards et les ruptures."),
+        ("Réviser le mix de production", "Prioriser les produits selon la demande, la marge et les contraintes de capacité.", "Suivre la marge par produit.")
+    ],
+    "Commerce international": [
+        ("Diversifier les marchés", "Évaluer les débouchés alternatifs et les risques de concentration.", "Suivre la part des ventes par marché."),
+        ("Surveiller les coûts d'importation", "Comparer prix, transport, change et délais de livraison.", "Suivre le coût rendu et le délai moyen."),
+        ("Renforcer la veille réglementaire", "Vérifier les changements de normes, droits et formalités auprès de sources officielles.", "Suivre les alertes réglementaires confirmées.")
+    ],
+    "Énergie": [
+        ("Réduire la consommation", "Repérer les usages les plus énergivores et tester des mesures d'efficacité.", "Suivre les kWh par unité produite."),
+        ("Diversifier les contrats", "Comparer les options d'approvisionnement et les risques contractuels.", "Suivre le coût moyen et l'exposition contractuelle."),
+        ("Étudier l'autoproduction", "Évaluer la faisabilité technique et économique d'une solution renouvelable.", "Suivre le coût complet et le temps de retour estimé.")
+    ],
+    "Finance & banque": [
+        ("Renforcer le suivi du risque", "Vérifier les expositions et les scénarios défavorables avant toute décision.", "Suivre les indicateurs de risque retenus."),
+        ("Tester des scénarios", "Comparer plusieurs hypothèses sans les traiter comme des prévisions.", "Suivre l'écart entre scénario et réalisation."),
+        ("Diversifier les expositions", "Examiner les concentrations et les limites internes applicables.", "Suivre les concentrations par catégorie.")
+    ],
+    "Transport & logistique": [
+        ("Optimiser les itinéraires", "Comparer les itinéraires, les taux de remplissage et les délais.", "Suivre le coût par livraison."),
+        ("Sécuriser les partenaires", "Identifier les partenaires critiques et préparer des solutions de secours.", "Suivre le taux de livraison à temps."),
+        ("Améliorer la planification", "Coordonner commandes, stocks et transport pour réduire les urgences.", "Suivre les livraisons urgentes et les retards.")
+    ],
+    "Tourisme": [
+        ("Adapter les capacités à la demande", "Ajuster les ressources aux périodes et segments de clientèle.", "Suivre le taux d'occupation et la satisfaction."),
+        ("Diversifier les clientèles", "Étudier de nouveaux segments et marchés émetteurs.", "Suivre la répartition de la clientèle."),
+        ("Renforcer la veille concurrentielle", "Comparer offres, saisonnalité et attentes des visiteurs.", "Suivre les prix comparables et les avis.")
+    ],
+    "Technologie & digital": [
+        ("Accélérer la montée en compétences", "Identifier les compétences prioritaires et planifier des formations ciblées.", "Suivre les compétences acquises et l'usage des outils."),
+        ("Tester des solutions numériques", "Lancer un pilote limité avant un déploiement plus large.", "Suivre le gain de temps et le taux d'adoption."),
+        ("Renforcer la cybersécurité", "Vérifier les accès, sauvegardes et procédures de réponse aux incidents.", "Suivre les incidents et les actions correctives.")
+    ],
+    "Immobilier & construction": [
+        ("Actualiser les hypothèses de coûts", "Comparer les coûts des matériaux, du financement et de la main-d'œuvre.", "Suivre l'écart au budget."),
+        ("Phaser les investissements", "Comparer les scénarios de calendrier et préserver la flexibilité.", "Suivre les engagements et les besoins de trésorerie."),
+        ("Diversifier les fournisseurs", "Comparer la disponibilité, les délais et la qualité des matériaux.", "Suivre les retards d'approvisionnement.")
+    ],
+    "Commerce & distribution": [
+        ("Protéger les marges", "Analyser les coûts par catégorie et comparer plusieurs options de prix.", "Suivre la marge brute par catégorie."),
+        ("Optimiser les stocks", "Repérer les produits à rotation lente et les risques de rupture.", "Suivre la rotation et le taux de rupture."),
+        ("Renégocier les conditions", "Comparer les conditions d'achat, de transport et de paiement.", "Suivre le coût rendu et les délais.")
+    ]
 }
 
-st.title("📡 Strategic Radar Maroc")
-st.subheader("Plateforme multisectorielle d'intelligence économique")
-st.info("Prototype académique : les chiffres affichés sont fictifs. Ils illustrent le fonctionnement et ne décrivent pas la situation réelle d'un secteur.")
+# ---------- Sidebar ----------
+st.sidebar.markdown("## 🛰️ Strategic Radar")
+st.sidebar.markdown("<div class='small-muted'>Centre de veille et d'aide à la décision</div>", unsafe_allow_html=True)
+st.sidebar.markdown("---")
+sector = st.sidebar.selectbox("Secteur à analyser", list(DATA.keys()))
+threshold = st.sidebar.slider("Seuil d'alerte sur la variation récente (%)", 1, 20, 5)
+st.sidebar.markdown("---")
+page = st.sidebar.radio("Navigation", ["Vue stratégique", "Analyse sectorielle", "Simulateur de décision", "Méthodologie & données"])
+st.sidebar.markdown("---")
+st.sidebar.caption("Prototype académique • Données de démonstration")
 
-with st.sidebar:
-    st.header("⚙️ Paramètres de veille")
-    secteur = st.selectbox("Choisir un secteur", list(SECTEURS))
-    seuil = st.slider("Seuil d'alerte sur la variation récente (%)", 1, 25, 5)
-s = SECTEURS[secteur]
-v = s["valeurs"]
-variation = (v[-1] - v[-2]) / v[-2] * 100
-total = (v[-1] - v[0]) / v[0] * 100
-df = pd.DataFrame({"Période":["P1","P2","P3","P4","P5"], s["indicateur"]:v})
-df["Variation (%)"] = df[s["indicateur"]].pct_change() * 100
+# ---------- Common calculations ----------
+record = DATA[sector]
+values = record["values"]
+recent = (values[-1] - values[-2]) / values[-2] * 100
+overall = (values[-1] - values[0]) / values[0] * 100
+all_recent = {s: (d["values"][-1]-d["values"][-2])/d["values"][-2]*100 for s,d in DATA.items()}
+risk_count = sum(v >= threshold for v in all_recent.values())
+chart_df = pd.DataFrame({"Période":[f"P{i}" for i in range(1,6)], "Valeur":values})
 
-st.header(f"📊 Tableau de bord — {secteur}")
-a,b,c = st.columns(3)
-a.metric("Dernière valeur", f"{v[-1]} {s['unite']}")
-b.metric("Variation récente", f"{variation:+.2f}%")
-c.metric("Variation depuis P1", f"{total:+.2f}%")
+# ---------- Hero ----------
+st.markdown(f"""
+<div class="hero">
+  <div class="eyebrow">Intelligence économique • Maroc</div>
+  <div class="hero-title">Strategic Radar <span style="color:#67e8f9">Maroc</span></div>
+  <div class="hero-sub">Détecter les signaux. Comprendre les enjeux. Comparer les options. Une interface de démonstration pour transformer une veille multisectorielle en pistes d'analyse et d'action.</div>
+  <span class="pill">10 secteurs suivis</span><span class="pill">Alertes paramétrables</span><span class="pill">Scénarios comparatifs</span><span class="pill">Données fictives clairement signalées</span>
+</div>
+""", unsafe_allow_html=True)
 
-fig = px.line(df, x="Période", y=s["indicateur"], markers=True, title=f"Évolution — {secteur}")
-fig.update_layout(template="plotly_white", yaxis_title=s["unite"])
-st.plotly_chart(fig, use_container_width=True)
+st.info("Prototype académique : les chiffres présentés sont fictifs et servent à illustrer le fonctionnement. Ils ne décrivent pas la situation économique réelle du Maroc.", icon="ℹ️")
 
-if s["sens"] == "demande":
-    if variation <= -seuil:
-        st.warning(f"⚠️ ALERTE : baisse de la demande de {abs(variation):.2f}%. Vérifier la saisonnalité et les segments concernés.")
-    elif variation >= seuil:
-        st.success(f"📈 Hausse de la demande de {variation:.2f}% : signal potentiellement favorable à confirmer.")
-    else:
-        st.info("La variation de la demande reste sous le seuil choisi.")
+if page == "Vue stratégique":
+    st.markdown("<div class='section-kicker'>Vue d'ensemble</div>", unsafe_allow_html=True)
+    st.header("Le radar économique")
+    c1,c2,c3,c4 = st.columns(4)
+    with c1:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Secteurs analysés</div><div class='metric-value'>{len(DATA)}</div><div class='metric-note'>Couverture multisectorielle</div></div>", unsafe_allow_html=True)
+    with c2:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Signaux au-dessus du seuil</div><div class='metric-value'>{risk_count}</div><div class='metric-note'>Seuil actuel : {threshold}%</div></div>", unsafe_allow_html=True)
+    with c3:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Secteur sélectionné</div><div class='metric-value' style='font-size:1.35rem'>{sector}</div><div class='metric-note'>Analyse détaillée disponible</div></div>", unsafe_allow_html=True)
+    with c4:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Variation récente</div><div class='metric-value'>{recent:+.2f}%</div><div class='metric-note'>Sur le dernier intervalle simulé</div></div>", unsafe_allow_html=True)
+
+    left,right = st.columns([1.35,1])
+    with left:
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.subheader("Carte des signaux sectoriels")
+        sector_df = pd.DataFrame({"Secteur":list(all_recent.keys()), "Variation récente (%)":list(all_recent.values())}).sort_values("Variation récente (%)")
+        fig = px.bar(sector_df, x="Variation récente (%)", y="Secteur", orientation="h", color="Variation récente (%)",
+                     color_continuous_scale=["#38bdf8","#818cf8","#fb7185"], text_auto=".1f")
+        fig.add_vline(x=threshold, line_dash="dash", line_color="#fda4af", annotation_text="Seuil d'alerte")
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          font_color="#dbeafe", margin=dict(l=8,r=8,t=20,b=8), height=430,
+                          coloraxis_showscale=False, xaxis_title="Variation récente (%)", yaxis_title="")
+        st.plotly_chart(fig, use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+    with right:
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.subheader("Signaux à examiner")
+        alerts = sector_df[sector_df["Variation récente (%)"] >= threshold].sort_values("Variation récente (%)", ascending=False)
+        if alerts.empty:
+            st.success("Aucun signal ne dépasse le seuil sélectionné dans cette démonstration.")
+        else:
+            for _, row in alerts.iterrows():
+                st.markdown(f"""
+                <div style="padding:12px 0;border-bottom:1px solid rgba(160,184,225,.13)">
+                  <div style="font-weight:700;color:#f1f5f9">{row['Secteur']}</div>
+                  <div style="color:#fda4af;font-size:1.2rem;font-weight:800">{row['Variation récente (%)']:+.2f}%</div>
+                  <div class="small-muted">Signal statistique à vérifier — pas une preuve de crise.</div>
+                </div>""", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='section-kicker'>Point de départ</div>", unsafe_allow_html=True)
+    st.markdown(f"**{sector} :** {record['meaning']} Les valeurs actuelles sont simulées; la prochaine étape d'une vraie veille serait de vérifier la tendance auprès de sources officielles et de plusieurs sources indépendantes.")
+    st.button("Ouvrir l'analyse sectorielle", on_click=lambda: st.session_state.update({"_unused": True}), help="Choisissez « Analyse sectorielle » dans le menu à gauche.")
+
+elif page == "Analyse sectorielle":
+    st.markdown("<div class='section-kicker'>Diagnostic sectoriel</div>", unsafe_allow_html=True)
+    st.header(f"Analyse — {sector}")
+    st.caption(f"Indicateur : {record['indicator']} • Unité : {record['unit']}")
+    m1,m2,m3 = st.columns(3)
+    with m1:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Dernière valeur</div><div class='metric-value'>{values[-1]:g}</div><div class='metric-note'>{record['unit']}</div></div>", unsafe_allow_html=True)
+    with m2:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Variation récente</div><div class='metric-value'>{recent:+.2f}%</div><div class='metric-note'>Entre P4 et P5</div></div>", unsafe_allow_html=True)
+    with m3:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Variation depuis P1</div><div class='metric-value'>{overall:+.2f}%</div><div class='metric-note'>Évolution cumulée simulée</div></div>", unsafe_allow_html=True)
+
+    left,right = st.columns([1.25,1])
+    with left:
+        fig = px.line(chart_df, x="Période", y="Valeur", markers=True, text="Valeur")
+        fig.update_traces(line=dict(color="#67e8f9",width=4), marker=dict(size=9,color="#a5f3fc"), textposition="top center")
+        fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                          font_color="#dbeafe", margin=dict(l=8,r=8,t=25,b=8), height=350,
+                          xaxis_title="", yaxis_title=record["unit"])
+        st.plotly_chart(fig, use_container_width=True)
+    with right:
+        st.markdown("<div class='panel'>", unsafe_allow_html=True)
+        st.subheader("Lecture du signal")
+        if recent >= threshold:
+            st.warning(f"Le mouvement récent ({recent:+.2f}%) dépasse le seuil de {threshold}%. Vérifier la donnée, puis rechercher des explications externes.")
+        elif recent <= -threshold:
+            st.warning(f"Le mouvement récent ({recent:+.2f}%) dépasse le seuil de baisse. Vérifier la donnée et son contexte.")
+        else:
+            st.success(f"Le mouvement récent ({recent:+.2f}%) reste sous le seuil choisi.")
+        st.write(record["meaning"])
+        st.markdown("**Questions à vérifier**")
+        st.markdown("- La donnée est-elle fiable et comparable dans le temps?\n- Observe-t-on le même signal dans une source indépendante?\n- Quels facteurs externes pourraient expliquer l'évolution?\n- Qui est exposé et quelle décision dépend de cette information?")
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    st.subheader("Solutions et recommandations")
+    options = SOLUTIONS[sector]
+    choice = st.selectbox("Choisir une piste à examiner", [x[0] for x in options])
+    selected = next(x for x in options if x[0] == choice)
+    st.markdown(f"<div class='panel'><div class='eyebrow'>Piste de réponse</div><h3>{selected[0]}</h3><p>{selected[1]}</p><div style='color:#67e8f9;font-weight:700'>Indicateur de suivi</div><p>{selected[2]}</p><p class='small-muted'>Piste indicative à valider avec le contexte, les ressources et les contraintes réelles de l'organisation.</p></div>", unsafe_allow_html=True)
+
+    st.subheader("Données utilisées")
+    table = pd.DataFrame({"Période":chart_df["Période"], record["indicator"]:values})
+    table["Variation (%)"] = table[record["indicator"]].pct_change().mul(100).round(2)
+    st.dataframe(table, use_container_width=True, hide_index=True)
+    st.download_button("⬇️ Télécharger les données de démonstration (CSV)", table.to_csv(index=False).encode("utf-8-sig"), file_name=f"radar_{sector.lower().replace(' ','_').replace('&','et')}.csv", mime="text/csv")
+
+elif page == "Simulateur de décision":
+    st.markdown("<div class='section-kicker'>Scénarios hypothétiques</div>", unsafe_allow_html=True)
+    st.header("Simulateur de décision")
+    st.write("Comparez une situation de référence, un scénario sans action et un scénario avec action. Les paramètres sont illustratifs : ce ne sont ni des prévisions ni des gains garantis.")
+    col1,col2 = st.columns(2)
+    with col1:
+        before = st.slider("Variation hypothétique sans action (%)", 0, 30, 10)
+    with col2:
+        effect = st.slider("Effet hypothétique de l'action (%)", 0, 25, 5)
+    current = float(values[-1])
+    no_action = current * (1 + before/100)
+    with_action = no_action * (1 - effect/100)
+    a,b,c = st.columns(3)
+    with a:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Valeur actuelle</div><div class='metric-value'>{current:.2f}</div><div class='metric-note'>Point de départ</div></div>", unsafe_allow_html=True)
+    with b:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Scénario sans action</div><div class='metric-value'>{no_action:.2f}</div><div class='metric-note'>Variation simulée : +{before}%</div></div>", unsafe_allow_html=True)
+    with c:
+        st.markdown(f"<div class='metric-card'><div class='metric-label'>Scénario avec action</div><div class='metric-value'>{with_action:.2f}</div><div class='metric-note'>Effet supposé : −{effect}%</div></div>", unsafe_allow_html=True)
+    sim_df = pd.DataFrame({"Scénario":["Valeur actuelle","Sans action","Avec action"],"Valeur":[current,no_action,with_action]})
+    fig = px.bar(sim_df, x="Scénario", y="Valeur", color="Scénario", text_auto=".2f",
+                 color_discrete_sequence=["#38bdf8","#fb7185","#34d399"])
+    fig.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                      font_color="#dbeafe", showlegend=False, margin=dict(l=8,r=8,t=20,b=8), height=350)
+    st.plotly_chart(fig, use_container_width=True)
+    st.info("À retenir : le simulateur illustre une méthode de comparaison. Pour l'utiliser en situation réelle, il faut estimer les effets à partir de données, d'hypothèses explicites et d'une validation métier.", icon="🧭")
+
 else:
-    if variation >= seuil:
-        st.error(f"🚨 ALERTE : hausse de {variation:.2f}% de l'indicateur. Vérifier les données et rechercher les causes.")
-    else:
-        st.success("✅ La variation récente ne dépasse pas le seuil d'alerte choisi.")
+    st.markdown("<div class='section-kicker'>Transparence & fiabilité</div>", unsafe_allow_html=True)
+    st.header("Méthodologie & données")
+    st.markdown("""
+    <div class='panel'>
+      <h3>Comment lire cette plateforme?</h3>
+      <p><b>1. Collecter :</b> réunir des informations pertinentes et datées provenant de sources vérifiables.</p>
+      <p><b>2. Contrôler :</b> vérifier la définition de l'indicateur, l'unité, la période et la cohérence des données.</p>
+      <p><b>3. Détecter :</b> comparer les valeurs et signaler les variations qui dépassent un seuil paramétrable.</p>
+      <p><b>4. Interpréter :</b> rechercher des explications à partir de sources indépendantes et du contexte sectoriel.</p>
+      <p><b>5. Décider :</b> comparer les options, leurs coûts, leurs risques et les indicateurs de suivi.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    st.subheader("Sources à connecter pour une version réelle")
+    sources = pd.DataFrame([
+        ["Haut-Commissariat au Plan (HCP)", "Statistiques nationales, prix, emploi et conjoncture", "https://www.hcp.ma/"],
+        ["Bank Al-Maghrib", "Indicateurs monétaires, financiers et rapports économiques", "https://www.bkam.ma/"],
+        ["Office des Changes", "Statistiques du commerce extérieur et des échanges", "https://www.oc.gov.ma/"],
+        ["Ministère de l'Agriculture", "Informations et publications sectorielles", "https://www.agriculture.gov.ma/"],
+        ["Office National des Aéroports (ONDA)", "Indicateurs de trafic aérien et données liées au tourisme", "https://www.onda.ma/"],
+    ], columns=["Source institutionnelle","Informations possibles à rechercher","Site officiel"])
+    st.dataframe(sources, use_container_width=True, hide_index=True)
+    st.markdown("**Important :** ces liens sont des points de départ vers des sites institutionnels, pas la preuve que chaque indicateur affiché dans cette version a été récupéré depuis ces sites.")
+    st.subheader("Données de démonstration")
+    st.write("Les valeurs P1 à P5 sont fictives. Aucune connexion automatique aux marchés, API ou bases de données officielles n'est configurée dans cette version.")
+    all_rows = []
+    for s,d in DATA.items():
+        for i,v in enumerate(d["values"],1):
+            all_rows.append({"Secteur":s,"Indicateur":d["indicator"],"Période":f"P{i}","Valeur":v,"Statut":"Fictif — démonstration"})
+    full = pd.DataFrame(all_rows)
+    st.download_button("⬇️ Télécharger le jeu de démonstration complet", full.to_csv(index=False).encode("utf-8-sig"), file_name="strategic_radar_maroc_demo.csv", mime="text/csv")
 
-st.header("🧠 Diagnostic stratégique")
-if s["sens"] == "demande":
-    st.write("L'indicateur représente la demande : une hausse peut être favorable, mais doit être vérifiée avec des données de fréquentation, de réservations ou de chiffre d'affaires.")
-elif variation >= seuil:
-    st.write(f"L'indicateur augmente au-delà du seuil choisi. Cela peut signaler une pression sur le secteur « {secteur} », mais ne prouve pas à lui seul une crise.")
-elif variation > 0:
-    st.write(f"L'indicateur augmente de {variation:.2f}%. Surveiller la tendance et vérifier les facteurs explicatifs.")
-else:
-    st.write("L'indicateur baisse ou reste stable. Vérifier si l'évolution est durable et significative.")
-st.caption("Une alerte détecte une variation, pas automatiquement sa cause. Les seuils doivent être adaptés au contexte réel.")
-
-st.divider()
-st.header("💡 Solutions & recommandations stratégiques")
-solutions = s["solutions"]
-choix = st.selectbox("Choisir une solution à examiner", [x[0] for x in solutions])
-st.subheader(choix)
-st.write(next(x[1] for x in solutions if x[0] == choix))
-st.markdown("**Plan d'action indicatif**")
-st.write("1. Vérifier la donnée et confirmer le signal.  2. Mesurer l'exposition de l'organisation.  3. Comparer plusieurs options réalistes.  4. Définir un indicateur de suivi et réévaluer la décision.")
-st.caption("Les recommandations sont des pistes de réflexion, pas des décisions automatiques.")
-
-st.divider()
-st.header("🔬 Simulateur de décision")
-st.write("Les paramètres suivants sont hypothétiques et ne constituent pas une prévision.")
-impact = st.slider("Variation hypothétique avant action (%)", -20, 30, 10)
-effet = st.slider("Effet hypothétique de la solution (%)", 0, 30, 5)
-sans_action = v[-1] * (1 + impact / 100)
-if s["sens"] == "demande":
-    avec_action = sans_action * (1 + effet / 100)
-    st.caption("Pour la demande, l'effet de la solution est simulé comme une hausse éventuelle de l'indicateur.")
-else:
-    avec_action = sans_action * (1 - effet / 100)
-    st.caption("Pour les coûts et risques, l'effet de la solution est simulé comme une réduction hypothétique de l'indicateur.")
-x,y,z = st.columns(3)
-x.metric("Valeur actuelle", f"{v[-1]:.2f}")
-y.metric("Scénario sans action", f"{sans_action:.2f}", f"{impact:+.1f}%")
-z.metric("Scénario avec action", f"{avec_action:.2f}", f"{effet:+.1f}%")
-sim = pd.DataFrame({"Scénario":["Valeur actuelle","Sans action","Avec action"],"Valeur":[v[-1],sans_action,avec_action]})
-st.plotly_chart(px.bar(sim, x="Scénario", y="Valeur", title="Comparaison des scénarios").update_layout(template="plotly_white", showlegend=False), use_container_width=True)
-
-st.subheader("📋 Données utilisées")
-st.dataframe(df, use_container_width=True, hide_index=True)
-st.download_button("⬇️ Télécharger les données de démonstration (CSV)", df.to_csv(index=False).encode("utf-8"), file_name="strategic_radar_demo.csv", mime="text/csv")
-st.caption("Strategic Radar Maroc — données fictives, sans connexion aux marchés en temps réel. Les résultats simulés ne garantissent aucun gain.")
+st.markdown("---")
+st.markdown("<div style='display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:#8292af;font-size:.78rem'><span>🛰️ Strategic Radar Maroc · Prototype académique</span><span>Veille → Analyse → Scénarios → Décision</span><span>Données de démonstration uniquement</span></div>", unsafe_allow_html=True)
