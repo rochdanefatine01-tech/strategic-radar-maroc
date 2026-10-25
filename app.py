@@ -50,6 +50,11 @@ div[data-testid="stSelectbox"] label, div[data-testid="stSlider"] label { color:
 .stButton>button:hover, .stDownloadButton>button:hover { border-color:#67e8f9; color:white; }
 div[data-testid="stDataFrame"] { border:1px solid var(--line); border-radius:12px; overflow:hidden; }
 div[data-testid="stAlert"] { border-radius:14px; }
+div[data-testid="stAlert"] p { color:#edf6ff !important; }
+div[data-testid="stAlert"] svg { color:#67e8f9 !important; }
+div[data-testid="stAlert"][kind="info"] { background:rgba(25,78,125,.34); border:1px solid rgba(103,232,249,.24); }
+div[data-testid="stAlert"][kind="warning"] { background:rgba(124,45,68,.28); border:1px solid rgba(251,113,133,.35); }
+div[data-testid="stAlert"][kind="success"] { background:rgba(6,95,70,.25); border:1px solid rgba(52,211,153,.3); }
 hr { border-color:var(--line); }
 footer {visibility:hidden;}
 </style>
@@ -197,7 +202,7 @@ if page == "Vue stratégique":
 
     st.markdown("<div class='section-kicker'>Point de départ</div>", unsafe_allow_html=True)
     st.markdown(f"**{sector} :** {record['meaning']} Les valeurs actuelles sont simulées; la prochaine étape d'une vraie veille serait de vérifier la tendance auprès de sources officielles et de plusieurs sources indépendantes.")
-    st.button("Ouvrir l'analyse sectorielle", on_click=lambda: st.session_state.update({"_unused": True}), help="Choisissez « Analyse sectorielle » dans le menu à gauche.")
+    st.caption("Pour approfondir ce secteur, choisissez « Analyse sectorielle » dans le menu de navigation à gauche.")
 
 elif page == "Analyse sectorielle":
     st.markdown("<div class='section-kicker'>Diagnostic sectoriel</div>", unsafe_allow_html=True)
@@ -288,12 +293,21 @@ else:
     st.subheader("Sources à connecter pour une version réelle")
     sources = pd.DataFrame([
         ["Haut-Commissariat au Plan (HCP)", "Statistiques nationales, prix, emploi et conjoncture", "https://www.hcp.ma/"],
+        ["Base de données statistiques HCP", "Données par thème : économie, énergie, transport, emploi", "https://bds.hcp.ma/"],
         ["Bank Al-Maghrib", "Indicateurs monétaires, financiers et rapports économiques", "https://www.bkam.ma/"],
         ["Office des Changes", "Statistiques du commerce extérieur et des échanges", "https://www.oc.gov.ma/"],
+        ["Base de données du commerce extérieur", "Consultation et export des statistiques mensuelles d'import/export", "https://services.oc.gov.ma/DataBase/CommerceExterieur/login"],
         ["Ministère de l'Agriculture", "Informations et publications sectorielles", "https://www.agriculture.gov.ma/"],
         ["Office National des Aéroports (ONDA)", "Indicateurs de trafic aérien et données liées au tourisme", "https://www.onda.ma/"],
     ], columns=["Source institutionnelle","Informations possibles à rechercher","Site officiel"])
     st.dataframe(sources, use_container_width=True, hide_index=True)
+    source_cols = st.columns(3)
+    with source_cols[0]:
+        st.link_button("Ouvrir le HCP", "https://www.hcp.ma/", use_container_width=True)
+    with source_cols[1]:
+        st.link_button("Ouvrir Bank Al-Maghrib", "https://www.bkam.ma/", use_container_width=True)
+    with source_cols[2]:
+        st.link_button("Ouvrir l'Office des Changes", "https://www.oc.gov.ma/", use_container_width=True)
     st.markdown("**Important :** ces liens sont des points de départ vers des sites institutionnels, pas la preuve que chaque indicateur affiché dans cette version a été récupéré depuis ces sites.")
     st.subheader("Données de démonstration")
     st.write("Les valeurs P1 à P5 sont fictives. Aucune connexion automatique aux marchés, API ou bases de données officielles n'est configurée dans cette version.")
