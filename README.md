@@ -1,32 +1,45 @@
 # Strategic Radar Maroc
 
-**Prototype académique Streamlit d’intelligence économique multisectorielle.**
+**Plateforme académique d'intelligence économique et financière.**
 
 ## Fonctionnalités
 
-- Analyse économique de plusieurs pays.
-- Comparaison des indicateurs entre pays.
-- Graphiques et tableaux statistiques.
-- Export des données disponibles en CSV.
-- Rubriques consacrées aux villes, régions et entreprises.
-- Accès aux sources institutionnelles officielles.
-- Simulateur pédagogique et analyse sectorielle.
+- Tableau de bord économique.
+- Indicateurs macroéconomiques de plusieurs pays.
+- PIB, croissance, inflation, chômage et population.
+- Dette publique, investissement étranger et commerce, selon les données disponibles.
+- Analyse historique et comparaison entre deux pays.
+- Focus sur l'économie marocaine.
+- Accès aux sources officielles des banques centrales.
+- Accès aux sources des marchés financiers.
+- Références pour les devises et les matières premières.
+- Export des séries statistiques au format CSV.
+- Méthodologie et limites des données documentées.
 
-## Déploiement
+## Sources de données
 
-- **Branche :** `main`
-- **Fichier principal :** `app.py`
-- **Dépendances :** `requirements.txt`
+Les séries macroéconomiques sont récupérées depuis l'API publique de la Banque mondiale :
 
-## Transparence des données
+https://api.worldbank.org/v2/
 
-Les graphiques de démonstration sectorielle utilisent des valeurs fictives, clairement signalées.
+Sources marocaines complémentaires :
 
-La rubrique « Pays » interroge l’API publique de la Banque mondiale pour récupérer les indicateurs disponibles. Les années et les données disponibles varient selon l’indicateur et peuvent être révisées par la source.
+- https://www.hcp.ma/
+- https://bds.hcp.ma/
+- https://www.bkam.ma/
+- https://www.oc.gov.ma/
+- https://www.casablanca-bourse.com/
+- https://www.ammc.ma/
 
-Les rubriques « Villes & régions » et « Entreprises » donnent accès aux sources officielles. Elles ne prétendent pas automatiser la récupération des données locales et financières lorsqu'aucune connexion n'est configurée.
+## Transparence
 
-## Lancement local
+Les dernières années disponibles varient selon l'indicateur. Les données peuvent être révisées par l'organisme source.
+
+Les rubriques consacrées aux banques centrales, aux marchés financiers, aux devises et aux matières premières donnent accès aux sources de référence. Elles ne prétendent pas afficher des cours en direct sans fournisseur de données connecté.
+
+Les comparaisons présentées sont descriptives et ne constituent pas des conclusions causales ni des conseils financiers.
+
+## Installation
 
 ```bash
 pip install -r requirements.txt
