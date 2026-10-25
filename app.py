@@ -2,22 +2,158 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import requests
-from datetime import datetime
+from datetime import datetime, timezone
 
 # =========================================================
-# CONFIGURATION
+# STRATEGIC RADAR MAROC
+# Données macroéconomiques : API publique Banque mondiale
+# Marchés : liens officiels, sans cours fictifs
 # =========================================================
 
 st.set_page_config(
     page_title="Strategic Radar Maroc",
     page_icon="🌐",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
+
+NAVY = "#08111f"
+PANEL = "#111e30"
+BORDER = "#25364d"
+CYAN = "#54d6e8"
+MUTED = "#9eb0c7"
+
+st.markdown(f"""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap');
+
+:root {{ color-scheme: dark; }}
+html, body, [class*="css"] {{ font-family: 'DM Sans', sans-serif; }}
+.stApp {{ background: {NAVY}; color: #edf4ff; }}
+[data-testid="stHeader"] {{ background: rgba(8,17,31,.96); }}
+[data-testid="stSidebar"] {{ background: #0b1626; border-right: 1px solid {BORDER}; }}
+[data-testid="stSidebar"] * {{ color: #e8f0fc; }}
+
+.block-container {{
+    padding-top: 1.5rem;
+    padding-bottom: 2.5rem;
+    max-width: 1500px;
+}}
+
+h1, h2, h3 {{
+    font-family: 'Manrope', sans-serif !important;
+    letter-spacing: -.03em;
+}}
+
+h1 {{ font-size: clamp(2rem,4vw,3.1rem) !important; }}
+h2 {{ font-size: clamp(1.35rem,2.3vw,1.8rem) !important; }}
+p, li {{ line-height: 1.65; }}
+
+.eyebrow {{
+    color: {CYAN};
+    font-size: .72rem;
+    font-weight: 800;
+    letter-spacing: .19em;
+    text-transform: uppercase;
+}}
+
+.hero {{
+    background: linear-gradient(120deg,#132640 0%,#102033 55%,#12313c 100%);
+    border: 1px solid #29445f;
+    border-radius: 22px;
+    padding: 28px 30px;
+    margin: 6px 0 22px 0;
+}}
+
+.hero p {{
+    color: #b9c8da;
+    max-width: 850px;
+    margin-bottom: 0;
+    font-size: 1rem;
+}}
+
+.pill {{
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: #183448;
+    color: {CYAN};
+    font-size: .72rem;
+    font-weight: 700;
+    margin-right: 6px;
+}}
+
+.metric-card {{
+    background: linear-gradient(145deg,#142239,#101a2a);
+    border: 1px solid {BORDER};
+    border-radius: 16px;
+    padding: 18px 18px 15px;
+    min-height: 130px;
+}}
+
+.metric-label {{ color: {MUTED}; font-size: .82rem; }}
+
+.metric-value {{
+    font-family: 'Manrope', sans-serif;
+    font-size: clamp(1.25rem,2vw,1.9rem);
+    font-weight: 800;
+    margin: 7px 0;
+    color: #f2f7ff;
+    overflow-wrap: anywhere;
+}}
+
+.metric-note {{ color: {CYAN}; font-size: .75rem; }}
+
+.section-card {{
+    background: {PANEL};
+    border: 1px solid {BORDER};
+    border-radius: 17px;
+    padding: 20px;
+    margin-bottom: 15px;
+}}
+
+.small-muted {{ color: {MUTED}; font-size: .85rem; }}
+a {{ color: {CYAN} !important; }}
+
+.stButton > button,
+.stDownloadButton > button {{
+    border-radius: 10px;
+    border: 1px solid #2c4963;
+}}
+
+[data-testid="stPlotlyChart"] {{
+    border: 1px solid {BORDER};
+    border-radius: 14px;
+    overflow: hidden;
+}}
+
+hr {{ border-color: {BORDER}; }}
+
+@media (max-width: 700px) {{
+    .block-container {{
+        padding-left: .8rem;
+        padding-right: .8rem;
+    }}
+    .hero {{
+        padding: 20px;
+        border-radius: 16px;
+    }}
+    .metric-card {{
+        padding: 13px;
+        min-height: 115px;
+    }}
+}}
+</style>
+""", unsafe_allow_html=True)
+
+
+# =========================================================
+# DONNÉES ET INDICATEURS
+# =========================================================
 
 WB_API = "https://api.worldbank.org/v2"
 
-COUNTRIES = {
+WB_COUNTRIES = {
     "Maroc": "MAR",
     "France": "FRA",
     "Espagne": "ESP",
@@ -25,1186 +161,858 @@ COUNTRIES = {
     "États-Unis": "USA",
     "Chine": "CHN",
     "Inde": "IND",
-    "Turquie": "TUR",
-    "Arabie saoudite": "SAU",
-    "Émirats arabes unis": "ARE",
-    "Égypte": "EGY",
-    "Tunisie": "TUN",
-    "Algérie": "DZA",
-    "Royaume-Uni": "GBR",
-    "Italie": "ITA",
-    "Japon": "JPN",
     "Brésil": "BRA",
+    "Italie": "ITA",
+    "Royaume-Uni": "GBR",
+    "Japon": "JPN",
     "Canada": "CAN",
+    "Tunisie": "TUN",
+    "Égypte": "EGY",
+    "Turquie": "TUR",
     "Afrique du Sud": "ZAF",
+    "Arabie saoudite": "SAU",
     "Sénégal": "SEN",
+    "Côte d'Ivoire": "CIV",
+    "Portugal": "PRT",
 }
 
 INDICATORS = {
-    "PIB (USD courants)": {
-        "code": "NY.GDP.MKTP.CD",
-        "unit": "USD"
-    },
-    "Croissance du PIB (%)": {
-        "code": "NY.GDP.MKTP.KD.ZG",
-        "unit": "%"
-    },
-    "Inflation (%)": {
-        "code": "FP.CPI.TOTL.ZG",
-        "unit": "%"
-    },
-    "Chômage (%)": {
-        "code": "SL.UEM.TOTL.ZS",
-        "unit": "%"
-    },
-    "Population": {
-        "code": "SP.POP.TOTL",
-        "unit": "habitants"
-    },
-    "Dette extérieure (USD)": {
-        "code": "DT.DOD.DECT.CD",
-        "unit": "USD"
-    },
-    "Investissement étranger direct (USD)": {
-        "code": "BX.KLT.DINV.CD.WD",
-        "unit": "USD"
-    },
-    "Exportations de biens et services (% PIB)": {
-        "code": "NE.EXP.GNFS.ZS",
-        "unit": "%"
-    },
-    "Importations de biens et services (% PIB)": {
-        "code": "NE.IMP.GNFS.ZS",
-        "unit": "%"
-    },
-    "PIB par habitant (USD)": {
-        "code": "NY.GDP.PCAP.CD",
-        "unit": "USD"
-    },
+    "PIB (USD courants)": ("NY.GDP.MKTP.CD", "USD"),
+    "Croissance du PIB (%)": ("NY.GDP.MKTP.KD.ZG", "%"),
+    "Inflation, prix à la consommation (%)": ("FP.CPI.TOTL.ZG", "%"),
+    "Chômage (%)": ("SL.UEM.TOTL.ZS", "%"),
+    "Population": ("SP.POP.TOTL", "personnes"),
+    "Dette publique (% du PIB)": ("GC.DOD.TOTL.GD.ZS", "%"),
+    "Investissement étranger direct (% du PIB)": (
+        "BX.KLT.DINV.WD.GD.ZS", "%"
+    ),
+    "Commerce (% du PIB)": ("NE.TRD.GNFS.ZS", "%"),
 }
 
-CENTRAL_BANKS = {
-    "Federal Reserve (États-Unis)": "https://www.federalreserve.gov/",
-    "Banque centrale européenne": "https://www.ecb.europa.eu/",
-    "Bank Al-Maghrib": "https://www.bkam.ma/",
-    "Bank of England": "https://www.bankofengland.co.uk/",
-    "Bank of Japan": "https://www.boj.or.jp/en/",
-    "Banque du Canada": "https://www.bankofcanada.ca/",
-    "Banque nationale suisse": "https://www.snb.ch/",
-}
-
-MARKET_SOURCES = {
-    "Bourse de Casablanca": "https://www.casablanca-bourse.com/",
-    "AMMC — Marché des capitaux marocain": "https://www.ammc.ma/",
-    "Nasdaq": "https://www.nasdaq.com/",
-    "S&P Dow Jones Indices": "https://www.spglobal.com/spdji/",
-    "Euronext Paris": "https://www.euronext.com/",
-    "Deutsche Börse": "https://www.deutsche-boerse.com/",
-    "London Stock Exchange": "https://www.londonstockexchange.com/",
-    "CME Group — matières premières": "https://www.cmegroup.com/",
-}
-
-OTHER_SOURCES = {
-    "Banque mondiale — Données": "https://data.worldbank.org/",
-    "Banque mondiale — API": "https://api.worldbank.org/v2/",
-    "FRED — Federal Reserve Bank of St. Louis": "https://fred.stlouisfed.org/",
-    "Haut-Commissariat au Plan (Maroc)": "https://www.hcp.ma/",
-    "Base de données statistiques du HCP": "https://bds.hcp.ma/",
-    "Office des Changes": "https://www.oc.gov.ma/",
-    "Fonds monétaire international": "https://www.imf.org/",
-    "OCDE": "https://www.oecd.org/",
-}
-
-# =========================================================
-# STYLE
-# =========================================================
-
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
-
-:root {
-    --bg: #080d1b;
-    --panel: #111c31;
-    --border: #263650;
-    --text: #edf4ff;
-    --muted: #98a9c5;
-    --cyan: #65e6f5;
-    --blue: #527cff;
-}
-
-html, body, [class*="css"] {
-    font-family: 'DM Sans', sans-serif;
-}
-
-.stApp {
-    background:
-        radial-gradient(circle at 90% 0%, rgba(0, 176, 205, 0.12), transparent 28%),
-        radial-gradient(circle at 0% 30%, rgba(61, 90, 180, 0.12), transparent 30%),
-        var(--bg);
-    color: var(--text);
-}
-
-[data-testid="stHeader"] {
-    background: rgba(8, 13, 27, 0.92);
-}
-
-[data-testid="stSidebar"] {
-    background: #0b1425;
-    border-right: 1px solid var(--border);
-}
-
-[data-testid="stSidebar"] * {
-    color: var(--text);
-}
-
-.block-container {
-    padding-top: 1.5rem;
-    padding-bottom: 3rem;
-    max-width: 1600px;
-}
-
-h1, h2, h3 {
-    font-family: 'Manrope', sans-serif;
-    color: var(--text);
-    letter-spacing: -0.5px;
-}
-
-.hero {
-    padding: 32px;
-    border: 1px solid #294662;
-    border-radius: 24px;
-    background: linear-gradient(120deg, #101d36, #102b40);
-    margin-bottom: 24px;
-}
-
-.hero-kicker {
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 3px;
-    color: var(--cyan);
-    text-transform: uppercase;
-}
-
-.hero-title {
-    font-size: clamp(30px, 5vw, 50px);
-    font-weight: 800;
-    line-height: 1.1;
-    margin-top: 15px;
-}
-
-.hero-title span {
-    color: var(--cyan);
-}
-
-.hero-description {
-    color: #b6c5dd;
-    font-size: 16px;
-    line-height: 1.8;
-    max-width: 850px;
-    margin-top: 18px;
-}
-
-.metric-card {
-    background: linear-gradient(145deg, #14233b, #10192c);
-    border: 1px solid #293b59;
-    border-radius: 18px;
-    padding: 22px;
-    min-height: 130px;
-    margin-bottom: 12px;
-}
-
-.metric-label {
-    font-size: 13px;
-    color: var(--muted);
-}
-
-.metric-value {
-    font-family: 'Manrope', sans-serif;
-    font-size: 30px;
-    font-weight: 800;
-    color: var(--text);
-    margin-top: 12px;
-}
-
-.metric-caption {
-    color: var(--cyan);
-    font-size: 12px;
-    margin-top: 5px;
-}
-
-.section-label {
-    color: var(--cyan);
-    font-size: 12px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-}
-
-.source-card {
-    background: #101a2d;
-    border: 1px solid #263650;
-    padding: 16px;
-    border-radius: 14px;
-    margin-bottom: 10px;
-}
-
-div[data-testid="stMetric"] {
-    background: #111c31;
-    border: 1px solid #263650;
-    padding: 15px;
-    border-radius: 15px;
-}
-
-.stButton > button {
-    border-radius: 10px;
-    border: 1px solid #385170;
-    min-height: 42px;
-}
-
-.stDownloadButton > button {
-    border-radius: 10px;
-}
-
-a {
-    color: #65e6f5 !important;
-}
-
-hr {
-    border-color: #263650;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# =========================================================
-# DATA FUNCTIONS
-# =========================================================
 
 @st.cache_data(ttl=86400, show_spinner=False)
-def fetch_world_bank(country_code, indicator_code, start_year=2000, end_year=None):
-    """
-    Récupère une série historique depuis l'API officielle
-    de la Banque mondiale. Le cache est valable 24 heures.
-    """
-    if end_year is None:
-        end_year = datetime.now().year
-
+def fetch_indicator(country_code: str, indicator_code: str):
+    """Récupère une série historique depuis l'API de la Banque mondiale."""
     url = (
-        f"{WB_API}/country/{country_code}/indicator/"
-        f"{indicator_code}"
+        f"{WB_API}/country/{country_code}"
+        f"/indicator/{indicator_code}"
     )
 
-    params = {
-        "format": "json",
-        "per_page": 2000,
-        "date": f"{start_year}:{end_year}"
-    }
+    response = requests.get(
+        url,
+        params={"format": "json", "per_page": 70},
+        timeout=18,
+    )
+    response.raise_for_status()
+    payload = response.json()
 
-    try:
-        response = requests.get(
-            url,
-            params=params,
-            timeout=25,
-            headers={"User-Agent": "StrategicRadarMaroc/1.0"}
-        )
-        response.raise_for_status()
-        payload = response.json()
+    if not isinstance(payload, list) or len(payload) < 2:
+        return pd.DataFrame(columns=["Année", "Valeur"])
 
-        if not isinstance(payload, list) or len(payload) < 2:
-            return pd.DataFrame()
+    if not payload[1]:
+        return pd.DataFrame(columns=["Année", "Valeur"])
 
-        records = payload[1]
+    rows = [
+        {
+            "Année": int(item["date"]),
+            "Valeur": item["value"],
+        }
+        for item in payload[1]
+        if item.get("value") is not None
+    ]
 
-        if not records:
-            return pd.DataFrame()
+    df = pd.DataFrame(rows)
 
-        rows = []
+    if not df.empty:
+        df = df.sort_values("Année").reset_index(drop=True)
 
-        for item in records:
-            value = item.get("value")
-
-            if value is None:
-                continue
-
-            rows.append({
-                "Année": int(item["date"]),
-                "Valeur": float(value),
-                "Pays": item["country"]["value"],
-                "Code pays": country_code,
-                "Indicateur": item["indicator"]["value"],
-                "Code indicateur": indicator_code
-            })
-
-        df = pd.DataFrame(rows)
-
-        if df.empty:
-            return df
-
-        return df.sort_values("Année")
-
-    except (requests.RequestException, ValueError, KeyError, TypeError):
-        return pd.DataFrame()
+    return df
 
 
-def get_latest_value(country_code, indicator_code):
-    df = fetch_world_bank(country_code, indicator_code)
-
+def latest_value(df):
     if df.empty:
         return None, None
 
-    last = df.dropna(subset=["Valeur"]).sort_values("Année").iloc[-1]
+    row = df.iloc[-1]
+    return int(row["Année"]), float(row["Valeur"])
 
-    return float(last["Valeur"]), int(last["Année"])
 
-
-def format_value(value, unit):
+def fmt_value(value, unit):
     if value is None:
-        return "Non disponible"
-
-    if unit == "%":
-        return f"{value:,.2f} %"
+        return "N/D"
 
     if unit == "USD":
-        if abs(value) >= 1_000_000_000_000:
-            return f"{value / 1_000_000_000_000:,.2f} T USD"
-        if abs(value) >= 1_000_000_000:
-            return f"{value / 1_000_000_000:,.2f} Md USD"
-        if abs(value) >= 1_000_000:
-            return f"{value / 1_000_000:,.2f} M USD"
-        return f"{value:,.2f} USD"
+        if abs(value) >= 1e12:
+            return f"{value / 1e12:,.2f} T$".replace(",", " ")
 
-    return f"{value:,.0f}"
+        if abs(value) >= 1e9:
+            return f"{value / 1e9:,.2f} Md$".replace(",", " ")
 
+        return f"{value:,.0f} $".replace(",", " ")
 
-def show_source_links(sources):
-    for name, url in sources.items():
-        st.markdown(f"- [{name}]({url})")
+    if unit == "personnes":
+        return f"{value:,.0f}".replace(",", " ")
+
+    return f"{value:.2f} %"
 
 
-def metric_card(label, value, caption):
+def style_chart(fig, height=400):
+    fig.update_layout(
+        paper_bgcolor=PANEL,
+        plot_bgcolor=PANEL,
+        font_color="#eaf2ff",
+        height=height,
+        margin=dict(l=15, r=15, t=55, b=15),
+    )
+    fig.update_xaxes(showgrid=False)
+    fig.update_yaxes(
+        gridcolor="#293b51",
+        zerolinecolor="#293b51",
+    )
+    return fig
+
+
+def source_link(label, url, desc):
+    st.markdown(
+        f"**[{label}]({url})**  \n"
+        f"<span class='small-muted'>{desc}</span>",
+        unsafe_allow_html=True,
+    )
+
+
+def official_source_card(name, url, description):
     st.markdown(
         f"""
-        <div class="metric-card">
-            <div class="metric-label">{label}</div>
-            <div class="metric-value">{value}</div>
-            <div class="metric-caption">{caption}</div>
+        <div class="section-card">
+            <h3>{name}</h3>
+            <p class="small-muted">{description}</p>
+            <a href="{url}" target="_blank">
+                Ouvrir la source officielle ↗
+            </a>
         </div>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
 # =========================================================
-# SIDEBAR
+# NAVIGATION
 # =========================================================
 
 with st.sidebar:
-    st.markdown("## 🌐 STRATEGIC RADAR")
-    st.caption("MAROC · ECONOMIC INTELLIGENCE")
-    st.markdown("---")
+    st.markdown(
+        "<div class='eyebrow'>Global intelligence</div>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("## 🌐 Strategic Radar")
+    st.caption("MAROC · ÉCONOMIE · FINANCE")
 
     page = st.radio(
         "NAVIGATION",
         [
-            "Vue globale",
-            "Économie mondiale",
-            "Comparateur de pays",
+            "Vue d'ensemble",
+            "Macroéconomie",
+            "Focus Maroc",
             "Banques centrales",
             "Marchés financiers",
             "Devises & matières premières",
-            "Villes & régions",
-            "Entreprises",
-            "Moteur d’analyse",
-            "Sources & méthodologie"
+            "Analyse économique",
+            "Sources & méthodologie",
         ],
-        index=0
     )
 
-    st.markdown("---")
-    st.caption("DONNÉES")
-    st.markdown(
-        "🟢 API officielle : Banque mondiale\n\n"
-        "🔵 Sources institutionnelles\n\n"
-        "🟠 Marchés : flux direct non garanti"
+    st.divider()
+    st.caption("Données macroéconomiques : Banque mondiale")
+    st.caption(
+        "Les cours de marché ne sont pas affichés sans fournisseur connecté."
     )
 
-    st.markdown("---")
-    st.caption("Prototype académique · 2026")
 
-
-# =========================================================
-# HERO
-# =========================================================
-
-st.markdown("""
-<div class="hero">
-    <div class="hero-kicker">
-        Global Economic & Financial Intelligence
-    </div>
-    <div class="hero-title">
-        Strategic Radar<br><span>Maroc</span>
-    </div>
-    <div class="hero-description">
-        Une plateforme d'intelligence économique pour explorer
-        les économies mondiales, comparer les indicateurs,
-        suivre les institutions financières et transformer
-        les données disponibles en analyses utiles à la décision.
-    </div>
-</div>
-""", unsafe_allow_html=True)
-
-st.caption(
-    "Transparence : les données historiques sont récupérées depuis "
-    "les sources identifiées. Les dernières années disponibles varient "
-    "selon les indicateurs. Les pages de marchés renvoient aux sources "
-    "officielles et ne prétendent pas afficher des cours en direct "
-    "sans fournisseur connecté."
+st.markdown(
+    "<div class='eyebrow'>Strategic Radar Maroc / Intelligence économique</div>",
+    unsafe_allow_html=True,
 )
 
+st.markdown(
+    """
+    <div class="hero">
+        <div class="pill">DONNÉES SOURCÉES</div>
+        <div class="pill">TABLEAU DE BORD</div>
+        <h1>
+            Comprendre l’économie.<br>
+            <span style="color:#54d6e8">
+                Éclairer les décisions.
+            </span>
+        </h1>
+        <p>
+            Une plateforme d’analyse économique et financière pour suivre
+            les indicateurs disponibles, comparer les pays et consulter
+            les sources institutionnelles — avec une séparation claire
+            entre données observées et interprétation.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+
 # =========================================================
-# PAGE 1: OVERVIEW
+# 1. VUE D'ENSEMBLE
 # =========================================================
 
-if page == "Vue globale":
-    st.markdown("## 🌍 Vue globale")
+if page == "Vue d'ensemble":
+    st.subheader("Vue d’ensemble")
+
     st.markdown(
-        '<div class="section-label">Economic intelligence dashboard</div>',
-        unsafe_allow_html=True
+        "Un point d’entrée vers les principaux modules. "
+        "Les indicateurs utilisent la dernière observation disponible "
+        "de la Banque mondiale."
     )
 
-    c1, c2, c3, c4 = st.columns(4)
+    selected = st.selectbox(
+        "Pays de référence",
+        list(WB_COUNTRIES.keys()),
+        index=0,
+        key="overview_country",
+    )
+
+    code = WB_COUNTRIES[selected]
+
+    chosen = [
+        "PIB (USD courants)",
+        "Croissance du PIB (%)",
+        "Inflation, prix à la consommation (%)",
+        "Chômage (%)",
+    ]
+
+    cols = st.columns(4)
+
+    for col, name in zip(cols, chosen):
+        indicator_code, unit = INDICATORS[name]
+
+        with col:
+            try:
+                df = fetch_indicator(code, indicator_code)
+                year, value = latest_value(df)
+
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{name}</div>
+                        <div class="metric-value">
+                            {fmt_value(value, unit)}
+                        </div>
+                        <div class="metric-note">
+                            {"Année " + str(year) if year else "Donnée indisponible"}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+            except Exception:
+                st.markdown(
+                    f"""
+                    <div class="metric-card">
+                        <div class="metric-label">{name}</div>
+                        <div class="metric-value">N/D</div>
+                        <div class="metric-note">
+                            Source momentanément indisponible
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+    st.write("")
+
+    left, right = st.columns([1.35, 1])
+
+    with left:
+        st.markdown("### Évolution macroéconomique")
+
+        metric = st.selectbox(
+            "Indicateur à visualiser",
+            list(INDICATORS.keys()),
+            key="overview_indicator",
+        )
+
+        indicator_code, unit = INDICATORS[metric]
+
+        try:
+            df = fetch_indicator(code, indicator_code)
+
+            if df.empty:
+                st.info("Aucune observation disponible pour cette sélection.")
+
+            else:
+                fig = px.line(
+                    df,
+                    x="Année",
+                    y="Valeur",
+                    markers=True,
+                    title=metric,
+                )
+
+                fig.update_traces(
+                    line=dict(color=CYAN, width=3),
+                    marker=dict(size=6),
+                )
+
+                fig.update_layout(
+                    paper_bgcolor=PANEL,
+                    plot_bgcolor=PANEL,
+                    font_color="#eaf2ff",
+                    margin=dict(l=12, r=12, t=55, b=12),
+                    height=360,
+                    xaxis_title="",
+                    yaxis_title=unit,
+                )
+
+                fig.update_xaxes(showgrid=False)
+                fig.update_yaxes(gridcolor="#293b51")
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                st.caption(
+                    f"Source : Banque mondiale · "
+                    f"Dernière observation : {int(df.iloc[-1]['Année'])}."
+                )
+
+        except Exception:
+            st.warning(
+                "La source n'a pas répondu. Réessaie dans quelques instants."
+            )
+
+    with right:
+        st.markdown("### Accès rapide")
+
+        quick = [
+            ("🌍", "Macroéconomie", "PIB, inflation, chômage et croissance"),
+            ("🇲🇦", "Focus Maroc", "Indicateurs du Maroc et séries historiques"),
+            ("🏦", "Banques centrales", "Décisions et communiqués officiels"),
+            ("📈", "Marchés financiers", "Accès aux places et indices de marché"),
+            ("🧠", "Analyse économique", "Comparaisons et lecture des variations"),
+        ]
+
+        for icon, title, desc in quick:
+            st.markdown(
+                f"""
+                <div class="section-card">
+                    <b>{icon} &nbsp; {title}</b>
+                    <div class="small-muted">{desc}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.info(
+        "Les dernières années disponibles dépendent de l’indicateur. "
+        "Les données peuvent être révisées par l’organisme source."
+    )
+
+
+# =========================================================
+# 2. MACROÉCONOMIE
+# =========================================================
+
+elif page == "Macroéconomie":
+    st.subheader("Macroéconomie")
+
+    c1, c2 = st.columns(2)
 
     with c1:
-        metric_card("Pays suivis", str(len(COUNTRIES)), "Comparaison internationale")
+        country = st.selectbox(
+            "Pays",
+            list(WB_COUNTRIES.keys()),
+            key="macro_country",
+        )
 
     with c2:
-        metric_card("Indicateurs", str(len(INDICATORS)), "Catalogue Banque mondiale")
-
-    with c3:
-        metric_card("Banques centrales", str(len(CENTRAL_BANKS)), "Sources officielles")
-
-    with c4:
-        metric_card("Sources", str(len(OTHER_SOURCES) + len(MARKET_SOURCES)), "Références institutionnelles")
-
-    st.markdown("### 📊 Explorer la plateforme")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.markdown("#### 🌐 Macroéconomie")
-        st.write(
-            "PIB, inflation, chômage, population, dette extérieure, "
-            "investissement et commerce international."
-        )
-
-        st.markdown("#### 🏦 Politique monétaire")
-        st.write(
-            "Consulte les sites officiels des banques centrales "
-            "et leurs publications relatives aux taux d'intérêt."
-        )
-
-        st.markdown("#### 🏙️ Territoires")
-        st.write(
-            "Accède aux sources institutionnelles marocaines "
-            "pour les statistiques régionales et locales."
-        )
-
-    with col2:
-        st.markdown("#### 📈 Marchés financiers")
-        st.write(
-            "Accède aux sites des grandes places financières "
-            "et de la Bourse de Casablanca."
-        )
-
-        st.markdown("#### 💱 Devises et matières premières")
-        st.write(
-            "Consulte les sources de référence pour les taux de change, "
-            "l'or, le pétrole et les autres matières premières."
-        )
-
-        st.markdown("#### 🧠 Analyse économique")
-        st.write(
-            "Compare les séries historiques et repère les variations "
-            "à examiner avec prudence."
-        )
-
-    st.markdown("---")
-    st.markdown("### 🇲🇦 Focus Maroc")
-
-    selected_indicator = st.selectbox(
-        "Choisir un indicateur pour le Maroc",
-        list(INDICATORS.keys()),
-        key="overview_indicator"
-    )
-
-    info = INDICATORS[selected_indicator]
-
-    df_ma = fetch_world_bank("MAR", info["code"])
-
-    if not df_ma.empty:
-        latest = df_ma.iloc[-1]
-        st.metric(
-            f"{selected_indicator} — dernière observation disponible",
-            format_value(float(latest["Valeur"]), info["unit"]),
-            help=f"Année de référence : {int(latest['Année'])}"
-        )
-
-        st.caption(
-            f"Année observée : {int(latest['Année'])} · "
-            "Source : Banque mondiale"
-        )
-
-        fig = px.line(
-            df_ma,
-            x="Année",
-            y="Valeur",
-            markers=True,
-            title=f"Évolution historique — {selected_indicator}"
-        )
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning(
-            "Aucune observation disponible pour cet indicateur "
-            "dans la période demandée."
-        )
-
-# =========================================================
-# PAGE 2: GLOBAL ECONOMY
-# =========================================================
-
-elif page == "Économie mondiale":
-    st.markdown("## 🌍 Économie mondiale")
-    st.write(
-        "Explore les indicateurs macroéconomiques publiés "
-        "par la Banque mondiale."
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        country_name = st.selectbox(
-            "Pays",
-            list(COUNTRIES.keys()),
-            index=list(COUNTRIES.keys()).index("Maroc"),
-            key="economy_country"
-        )
-
-    with col2:
-        indicator_name = st.selectbox(
+        metric = st.selectbox(
             "Indicateur",
             list(INDICATORS.keys()),
-            key="economy_indicator"
+            key="macro_metric",
         )
 
-    with col3:
-        start_year = st.selectbox(
-            "Début de période",
-            [1990, 2000, 2005, 2010, 2015, 2020],
-            index=1
+    indicator_code, unit = INDICATORS[metric]
+
+    try:
+        df = fetch_indicator(
+            WB_COUNTRIES[country],
+            indicator_code,
         )
 
-    country_code = COUNTRIES[country_name]
-    indicator = INDICATORS[indicator_name]
+        if df.empty:
+            st.warning("Aucune donnée disponible pour ce pays et cet indicateur.")
 
-    df = fetch_world_bank(
-        country_code,
-        indicator["code"],
-        start_year=start_year
-    )
+        else:
+            year, value = latest_value(df)
 
-    if not df.empty:
-        latest = df.iloc[-1]
+            a, b, c = st.columns(3)
+            a.metric("Dernière valeur", fmt_value(value, unit))
+            b.metric("Année observée", year)
+            c.metric("Observations disponibles", len(df))
 
-        col1, col2 = st.columns([1, 2])
-
-        with col1:
-            st.metric(
-                "Dernière observation",
-                format_value(float(latest["Valeur"]), indicator["unit"])
-            )
-            st.caption(f"Année : {int(latest['Année'])}")
-
-        with col2:
             fig = px.line(
                 df,
                 x="Année",
                 y="Valeur",
                 markers=True,
-                title=f"{indicator_name} — {country_name}"
+                title=f"{metric} — {country}",
             )
-            fig.update_layout(template="plotly_dark")
+
+            fig.update_traces(line=dict(color=CYAN, width=3))
+            style_chart(fig, height=420)
+            fig.update_yaxes(title=unit)
+
             st.plotly_chart(fig, use_container_width=True)
 
-        st.markdown("### Données historiques")
-        st.dataframe(df, use_container_width=True, hide_index=True)
+            st.markdown("### Série historique")
+            st.dataframe(
+                df.sort_values("Année", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
 
-        st.download_button(
-            "⬇️ Télécharger CSV",
-            data=df.to_csv(index=False).encode("utf-8-sig"),
-            file_name=f"{country_code}_{indicator['code']}.csv",
-            mime="text/csv"
-        )
-    else:
-        st.warning(
-            "Pas de données disponibles pour cette combinaison. "
-            "Essaie un autre indicateur ou un autre pays."
+            st.download_button(
+                "Télécharger la série CSV",
+                df.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"{country}_{indicator_code}.csv",
+                mime="text/csv",
+            )
+
+            st.caption(
+                f"Source : Banque mondiale · Indicateur {indicator_code} "
+                f"· Dernière observation : {year}."
+            )
+
+    except Exception:
+        st.error(
+            "Impossible de récupérer les données pour le moment. "
+            "Vérifie la connexion et réessaie."
         )
 
-    st.markdown("### Sources")
-    show_source_links({
-        "Banque mondiale — données": "https://data.worldbank.org/",
-        "API officielle": "https://api.worldbank.org/v2/"
-    })
 
 # =========================================================
-# PAGE 3: COUNTRY COMPARISON
+# 3. FOCUS MAROC
 # =========================================================
 
-elif page == "Comparateur de pays":
-    st.markdown("## 📊 Comparateur international")
-    st.write(
-        "Compare les dernières observations disponibles "
-        "pour plusieurs pays et un même indicateur."
+elif page == "Focus Maroc":
+    st.subheader("🇲🇦 Focus Maroc")
+
+    st.markdown(
+        "Indicateurs macroéconomiques du Maroc récupérés depuis "
+        "l’API publique de la Banque mondiale."
     )
 
-    indicator_name = st.selectbox(
-        "Indicateur à comparer",
+    metric = st.selectbox(
+        "Indicateur",
         list(INDICATORS.keys()),
-        key="comparison_indicator"
+        key="morocco_metric",
     )
 
-    selected_countries = st.multiselect(
-        "Sélectionner les pays",
-        list(COUNTRIES.keys()),
-        default=["Maroc", "France", "Espagne", "États-Unis"],
-        max_selections=10
+    indicator_code, unit = INDICATORS[metric]
+
+    try:
+        df = fetch_indicator("MAR", indicator_code)
+
+        if df.empty:
+            st.warning("Aucune observation disponible.")
+
+        else:
+            year, value = latest_value(df)
+
+            x, y, z = st.columns(3)
+            x.metric("Dernière valeur disponible", fmt_value(value, unit))
+            y.metric("Année observée", year)
+            z.metric("Code indicateur", indicator_code)
+
+            fig = px.area(
+                df,
+                x="Année",
+                y="Valeur",
+                title=metric,
+            )
+
+            fig.update_traces(
+                line=dict(color=CYAN, width=2),
+                fillcolor="rgba(84,214,232,.12)",
+            )
+
+            style_chart(fig, height=390)
+            fig.update_yaxes(title=unit)
+
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.dataframe(
+                df.sort_values("Année", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.download_button(
+                "Exporter les données",
+                df.to_csv(index=False).encode("utf-8-sig"),
+                file_name=f"Maroc_{indicator_code}.csv",
+                mime="text/csv",
+            )
+
+    except Exception:
+        st.error("La Banque mondiale est momentanément inaccessible.")
+
+    st.markdown("### Sources marocaines complémentaires")
+
+    source_link(
+        "Haut-Commissariat au Plan (HCP)",
+        "https://www.hcp.ma/",
+        "Statistiques nationales, enquêtes et publications.",
     )
 
-    info = INDICATORS[indicator_name]
-    comparison_rows = []
+    source_link(
+        "Base de données statistiques du HCP",
+        "https://bds.hcp.ma/",
+        "Séries statistiques disponibles.",
+    )
 
-    with st.spinner("Récupération des données officielles..."):
-        for country in selected_countries:
-            code = COUNTRIES[country]
-            value, year = get_latest_value(code, info["code"])
+    source_link(
+        "Office des Changes",
+        "https://www.oc.gov.ma/",
+        "Commerce extérieur et balance des paiements.",
+    )
 
-            if value is not None:
-                comparison_rows.append({
-                    "Pays": country,
-                    "Code": code,
-                    "Année": year,
-                    "Valeur": value,
-                    "Unité": info["unit"]
-                })
+    source_link(
+        "Bank Al-Maghrib",
+        "https://www.bkam.ma/",
+        "Politique monétaire et rapports économiques.",
+    )
 
-    if comparison_rows:
-        df_compare = pd.DataFrame(comparison_rows)
-
-        fig = px.bar(
-            df_compare,
-            x="Pays",
-            y="Valeur",
-            color="Pays",
-            hover_data=["Année", "Code"],
-            title=f"Comparaison : {indicator_name}"
-        )
-        fig.update_layout(
-            template="plotly_dark",
-            showlegend=False
-        )
-        st.plotly_chart(fig, use_container_width=True)
-
-        st.dataframe(
-            df_compare,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.download_button(
-            "⬇️ Exporter la comparaison",
-            data=df_compare.to_csv(index=False).encode("utf-8-sig"),
-            file_name="comparaison_pays.csv",
-            mime="text/csv"
-        )
-
-        st.info(
-            "Attention : les dernières années peuvent différer entre pays. "
-            "Vérifie la colonne Année avant de comparer les valeurs."
-        )
-    else:
-        st.warning(
-            "Aucune donnée disponible. Sélectionne au moins un pays "
-            "et réessaie."
-        )
-
-    show_source_links({
-        "Banque mondiale": "https://data.worldbank.org/",
-        "API Banque mondiale": "https://api.worldbank.org/v2/"
-    })
 
 # =========================================================
-# PAGE 4: CENTRAL BANKS
+# 4. BANQUES CENTRALES
 # =========================================================
 
 elif page == "Banques centrales":
-    st.markdown("## 🏦 Banques centrales")
-    st.write(
-        "Les décisions de politique monétaire doivent être vérifiées "
-        "dans les communiqués officiels de chaque institution."
+    st.subheader("Banques centrales")
+
+    st.markdown(
+        "Consulte les décisions et communiqués à la source. "
+        "Les taux ne sont pas recopiés ici sans extraction vérifiée et datée."
     )
+
+    banks = [
+        (
+            "🇲🇦 Bank Al-Maghrib",
+            "https://www.bkam.ma/",
+            "Communiqués de politique monétaire, rapports et décisions.",
+        ),
+        (
+            "🇺🇸 Federal Reserve (Fed)",
+            "https://www.federalreserve.gov/monetarypolicy.htm",
+            "Décisions et documents de politique monétaire.",
+        ),
+        (
+            "🇪🇺 Banque centrale européenne (BCE)",
+            "https://www.ecb.europa.eu/press/govcdec/mopo/html/index.en.html",
+            "Décisions officielles de politique monétaire.",
+        ),
+        (
+            "🇬🇧 Bank of England",
+            "https://www.bankofengland.co.uk/monetary-policy",
+            "Décisions et rapports monétaires.",
+        ),
+    ]
+
+    for name, url, desc in banks:
+        official_source_card(name, url, desc)
 
     st.warning(
-        "Cette page fournit les accès officiels. Elle ne prétend pas "
-        "récupérer automatiquement toutes les décisions ou les taux "
-        "directeurs en temps réel."
+        "Pour comparer les taux, vérifie la date de décision et le type de taux : "
+        "taux directeur, taux de dépôt ou taux de refinancement."
     )
 
-    for name, url in CENTRAL_BANKS.items():
-        with st.container(border=True):
-            st.markdown(f"### {name}")
-            st.link_button("Consulter le site officiel", url)
-
-    st.markdown("### Comparaison des politiques monétaires")
-    st.write(
-        "Pour une comparaison rigoureuse, relève pour chaque banque : "
-        "le taux directeur, la date de décision, le taux précédent, "
-        "la variation en points de base et le communiqué associé."
-    )
-
-    st.dataframe(
-        pd.DataFrame([
-            {
-                "Institution": name,
-                "Taux directeur": "À vérifier dans la source officielle",
-                "Dernière décision": "À vérifier dans le communiqué",
-                "Source": url
-            }
-            for name, url in CENTRAL_BANKS.items()
-        ]),
-        use_container_width=True,
-        hide_index=True
-    )
-
-    st.caption(
-        "Les valeurs de taux ne sont pas inventées : elles ne sont "
-        "pas affichées comme observations vérifiées tant qu'elles "
-        "ne sont pas récupérées depuis une source appropriée."
-    )
 
 # =========================================================
-# PAGE 5: FINANCIAL MARKETS
+# 5. MARCHÉS FINANCIERS
 # =========================================================
 
 elif page == "Marchés financiers":
-    st.markdown("## 📈 Marchés financiers")
-    st.write(
-        "Accède aux sources officielles des principales places "
-        "financières et consulte leurs publications."
+    st.subheader("Marchés financiers")
+
+    st.markdown(
+        "Accès aux sources des places financières. Les valeurs de marché "
+        "ne sont pas affichées dans ce prototype sans fournisseur de données connecté."
     )
 
-    st.warning(
-        "Les cours boursiers en direct nécessitent un fournisseur de "
-        "données adapté. Les liens ci-dessous ne sont pas des cotations "
-        "en temps réel."
-    )
+    markets = [
+        (
+            "🇲🇦 Bourse de Casablanca",
+            "https://www.casablanca-bourse.com/",
+            "Marché marocain, indices, cours et publications.",
+        ),
+        (
+            "🇺🇸 Nasdaq",
+            "https://www.nasdaq.com/market-activity",
+            "Indices et informations de marché.",
+        ),
+        (
+            "🇺🇸 S&P 500",
+            "https://www.spglobal.com/spdji/en/indices/equity/sp-500/",
+            "Page officielle de l’indice S&P 500.",
+        ),
+        (
+            "🇫🇷 Euronext Paris / CAC 40",
+            "https://live.euronext.com/",
+            "Informations de marché et indices.",
+        ),
+        (
+            "🇩🇪 Deutsche Börse",
+            "https://www.deutsche-boerse.com/",
+            "Informations sur les marchés allemands.",
+        ),
+        (
+            "📑 AMMC",
+            "https://www.ammc.ma/",
+            "Réglementation et informations du marché des capitaux marocain.",
+        ),
+    ]
 
-    for name, url in MARKET_SOURCES.items():
-        with st.container(border=True):
-            st.markdown(f"### {name}")
-            st.link_button("Ouvrir la source", url)
+    for name, url, desc in markets:
+        official_source_card(name, url, desc)
 
-    st.markdown("### Indices à suivre")
-
-    indices = pd.DataFrame([
-        {"Marché": "États-Unis", "Indice": "S&P 500", "Source": "S&P Dow Jones Indices"},
-        {"Marché": "États-Unis", "Indice": "Nasdaq Composite", "Source": "Nasdaq"},
-        {"Marché": "France", "Indice": "CAC 40", "Source": "Euronext"},
-        {"Marché": "Allemagne", "Indice": "DAX", "Source": "Deutsche Börse"},
-        {"Marché": "Maroc", "Indice": "MASI", "Source": "Bourse de Casablanca"},
-    ])
-
-    st.dataframe(indices, use_container_width=True, hide_index=True)
 
 # =========================================================
-# PAGE 6: FX & COMMODITIES
+# 6. DEVISES ET MATIÈRES PREMIÈRES
 # =========================================================
 
 elif page == "Devises & matières premières":
-    st.markdown("## 💱 Devises & matières premières")
+    st.subheader("Devises & matières premières")
 
-    st.write(
-        "Cette rubrique centralise les sources utiles pour examiner "
-        "les taux de change et les prix des matières premières."
+    st.markdown(
+        "Les cours changent fréquemment. Pour éviter d’afficher des valeurs "
+        "périmées ou inventées, cette rubrique renvoie aux sources de référence."
     )
 
-    st.warning(
-        "Aucun prix actuel n'est fabriqué ou simulé. Les cours nécessitent "
-        "une source datée ou un fournisseur de marché connecté."
-    )
+    links = [
+        (
+            "💱 Taux de change — Office des Changes",
+            "https://www.oc.gov.ma/",
+            "Références marocaines sur les changes.",
+        ),
+        (
+            "💶 BCE — taux de change de référence",
+            "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html",
+            "Taux de change de référence de l’euro.",
+        ),
+        (
+            "🥇 Or — LBMA",
+            "https://www.lbma.org.uk/prices-and-data",
+            "Prix et données de référence du marché de l’or.",
+        ),
+        (
+            "🛢️ Énergie — U.S. EIA",
+            "https://www.eia.gov/",
+            "Données énergétiques et séries statistiques.",
+        ),
+        (
+            "🧾 Banque mondiale — matières premières",
+            "https://www.worldbank.org/en/research/commodity-markets",
+            "Rapports et données de prix des matières premières.",
+        ),
+    ]
 
-    sources = {
-        "Office des Changes — Maroc": "https://www.oc.gov.ma/",
-        "Bank Al-Maghrib": "https://www.bkam.ma/",
-        "Banque centrale européenne — taux de change": "https://www.ecb.europa.eu/stats/policy_and_exchange_rates/euro_reference_exchange_rates/html/index.en.html",
-        "FRED — données économiques": "https://fred.stlouisfed.org/",
-        "CME Group — matières premières": "https://www.cmegroup.com/",
-        "U.S. Energy Information Administration": "https://www.eia.gov/",
-        "World Gold Council": "https://www.gold.org/",
-    }
+    for name, url, desc in links:
+        official_source_card(name, url, desc)
 
-    for name, url in sources.items():
-        with st.container(border=True):
-            st.markdown(f"### {name}")
-            st.link_button("Consulter la source", url)
-
-    st.markdown("### Actifs à suivre")
-
-    assets = pd.DataFrame([
-        {"Catégorie": "Devise", "Actif": "EUR/USD", "Données": "Source de change requise"},
-        {"Catégorie": "Devise", "Actif": "USD/MAD", "Données": "Source officielle marocaine requise"},
-        {"Catégorie": "Matière première", "Actif": "Or", "Données": "Fournisseur de prix requis"},
-        {"Catégorie": "Énergie", "Actif": "Pétrole Brent", "Données": "Fournisseur de prix requis"},
-        {"Catégorie": "Énergie", "Actif": "Gaz naturel", "Données": "Fournisseur de prix requis"},
-    ])
-
-    st.dataframe(assets, use_container_width=True, hide_index=True)
 
 # =========================================================
-# PAGE 7: CITIES & REGIONS
+# 7. ANALYSE ÉCONOMIQUE
 # =========================================================
 
-elif page == "Villes & régions":
-    st.markdown("## 🏙️ Villes & régions du Maroc")
+elif page == "Analyse économique":
+    st.subheader("Analyse économique")
 
-    st.write(
-        "Les statistiques locales doivent être consultées auprès "
-        "des organismes publics compétents. La disponibilité dépend "
-        "de l'indicateur et du niveau géographique."
+    st.markdown(
+        "Compare deux pays sur un indicateur commun. "
+        "Le tableau de bord calcule les écarts observés ; "
+        "l’interprétation doit tenir compte du contexte économique."
     )
 
-    city_sources = {
-        "Haut-Commissariat au Plan": "https://www.hcp.ma/",
-        "Base de données statistiques du HCP": "https://bds.hcp.ma/",
-        "Portail national des collectivités territoriales": "https://www.collectivites-territoriales.gov.ma/",
-        "Data.gov.ma — portail de données ouvertes": "https://data.gov.ma/",
-    }
+    a, b = st.columns(2)
 
-    for name, url in city_sources.items():
-        with st.container(border=True):
-            st.markdown(f"### {name}")
-            st.link_button("Accéder aux données", url)
+    with a:
+        country_a = st.selectbox(
+            "Pays A",
+            list(WB_COUNTRIES.keys()),
+            index=0,
+            key="compare_country_a",
+        )
 
-    st.markdown("### Indicateurs locaux à rechercher")
+    with b:
+        country_b = st.selectbox(
+            "Pays B",
+            list(WB_COUNTRIES.keys()),
+            index=1,
+            key="compare_country_b",
+        )
 
-    st.dataframe(
-        pd.DataFrame([
-            {"Indicateur": "Population", "Niveau": "Région / ville selon disponibilité"},
-            {"Indicateur": "Chômage", "Niveau": "Selon les publications disponibles"},
-            {"Indicateur": "Activité économique", "Niveau": "Selon les publications disponibles"},
-            {"Indicateur": "Prix et coût de la vie", "Niveau": "Selon les publications disponibles"},
-            {"Indicateur": "Éducation et santé", "Niveau": "Selon les publications disponibles"},
-        ]),
-        use_container_width=True,
-        hide_index=True
+    metric = st.selectbox(
+        "Indicateur à comparer",
+        list(INDICATORS.keys()),
+        key="compare_metric",
     )
 
-    st.info(
-        "Les données municipales ne sont pas générées artificiellement. "
-        "L'intégration automatique nécessite un fichier de données "
-        "ou une API officielle compatible."
-    )
+    indicator_code, unit = INDICATORS[metric]
 
-# =========================================================
-# PAGE 8: COMPANIES
-# =========================================================
+    try:
+        da = fetch_indicator(
+            WB_COUNTRIES[country_a],
+            indicator_code,
+        ).rename(columns={"Valeur": country_a})
 
-elif page == "Entreprises":
-    st.markdown("## 🏢 Entreprises & intelligence financière")
+        db = fetch_indicator(
+            WB_COUNTRIES[country_b],
+            indicator_code,
+        ).rename(columns={"Valeur": country_b})
 
-    st.write(
-        "Consulte les sources officielles pour les sociétés cotées, "
-        "les publications réglementaires et les données financières."
-    )
+        merged = pd.merge(
+            da,
+            db,
+            on="Année",
+            how="inner",
+        ).sort_values("Année")
 
-    company_sources = {
-        "Bourse de Casablanca": "https://www.casablanca-bourse.com/",
-        "Autorité marocaine du marché des capitaux (AMMC)": "https://www.ammc.ma/",
-        "Office des Changes": "https://www.oc.gov.ma/",
-        "OMPIC — propriété industrielle et commerciale": "https://www.ompic.ma/",
-    }
+        if merged.empty:
+            st.info("Pas d’années communes disponibles pour les deux pays.")
 
-    for name, url in company_sources.items():
-        with st.container(border=True):
-            st.markdown(f"### {name}")
-            st.link_button("Consulter la source officielle", url)
+        else:
+            latest = merged.iloc[-1]
+            year = int(latest["Année"])
 
-    st.markdown("### Grille d'analyse d'une entreprise")
+            value_a = float(latest[country_a])
+            value_b = float(latest[country_b])
 
-    st.write(
-        "Pour analyser une entreprise, collecte ses états financiers, "
-        "son chiffre d'affaires, son résultat net, son endettement, "
-        "sa rentabilité et les informations réglementaires disponibles."
-    )
+            st.markdown(f"**Dernière année commune : {year}**")
 
-    uploaded_file = st.file_uploader(
-        "Importer un fichier CSV d'entreprise pour l'analyser",
-        type=["csv"],
-        help="Le fichier doit contenir des données financières réelles."
-    )
+            c1, c2, c3 = st.columns(3)
+            c1.metric(country_a, fmt_value(value_a, unit))
+            c2.metric(country_b, fmt_value(value_b, unit))
+            c3.metric(
+                "Écart A − B",
+                fmt_value(value_a - value_b, unit),
+            )
 
-    if uploaded_file is not None:
-        try:
-            df_company = pd.read_csv(uploaded_file)
+            fig = px.line(
+                merged,
+                x="Année",
+                y=[country_a, country_b],
+                markers=True,
+                title=metric,
+            )
 
-            st.success("Fichier chargé.")
-            st.dataframe(df_company, use_container_width=True)
+            style_chart(fig, height=400)
+            fig.update_yaxes(title=unit)
 
-            numeric_cols = df_company.select_dtypes(
-                include="number"
-            ).columns.tolist()
+            st.plotly_chart(fig, use_container_width=True)
 
-            if numeric_cols:
-                selected_col = st.selectbox(
-                    "Variable numérique à visualiser",
-                    numeric_cols
-                )
-
-                fig = px.line(
-                    df_company,
-                    y=selected_col,
-                    markers=True,
-                    title=f"Évolution de {selected_col}"
-                )
-                fig.update_layout(template="plotly_dark")
-                st.plotly_chart(fig, use_container_width=True)
+            st.dataframe(
+                merged.sort_values("Année", ascending=False),
+                use_container_width=True,
+                hide_index=True,
+            )
 
             st.download_button(
-                "⬇️ Télécharger les données chargées",
-                data=df_company.to_csv(index=False).encode("utf-8-sig"),
-                file_name="entreprise_analyse.csv",
-                mime="text/csv"
+                "Télécharger la comparaison CSV",
+                merged.to_csv(index=False).encode("utf-8-sig"),
+                file_name="comparaison_pays.csv",
+                mime="text/csv",
             )
 
-        except Exception as exc:
-            st.error(f"Impossible de lire le fichier : {exc}")
+            if value_a > value_b:
+                st.info(
+                    f"Sur la dernière année commune, {metric.lower()} "
+                    f"est numériquement plus élevé pour {country_a}. "
+                    "Cela ne signifie pas automatiquement une meilleure performance."
+                )
 
-# =========================================================
-# PAGE 9: ANALYTICS ENGINE
-# =========================================================
+            elif value_a < value_b:
+                st.info(
+                    f"Sur la dernière année commune, {metric.lower()} "
+                    f"est numériquement plus élevé pour {country_b}. "
+                    "Cela ne suffit pas à conclure sur la performance globale."
+                )
 
-elif page == "Moteur d’analyse":
-    st.markdown("## 🧠 Moteur d'analyse économique")
+            else:
+                st.info(
+                    "Les deux valeurs sont identiques pour la dernière année commune."
+                )
 
-    st.write(
-        "Cet outil calcule les variations observées dans une série "
-        "historique. Les résultats constituent des signaux descriptifs, "
-        "pas des prévisions certaines."
+    except Exception:
+        st.error(
+            "Impossible de récupérer les données comparées. Réessaie plus tard."
+        )
+
+    st.caption(
+        "Le moteur fournit une comparaison descriptive, "
+        "pas une causalité automatique ni un conseil financier."
     )
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        country_name = st.selectbox(
-            "Pays",
-            list(COUNTRIES.keys()),
-            index=list(COUNTRIES.keys()).index("Maroc"),
-            key="analysis_country"
-        )
-
-    with col2:
-        indicator_name = st.selectbox(
-            "Indicateur",
-            list(INDICATORS.keys()),
-            key="analysis_indicator"
-        )
-
-    with col3:
-        period_start = st.selectbox(
-            "Début de la période",
-            [1990, 2000, 2005, 2010, 2015, 2020],
-            index=1,
-            key="analysis_start"
-        )
-
-    info = INDICATORS[indicator_name]
-
-    df_analysis = fetch_world_bank(
-        COUNTRIES[country_name],
-        info["code"],
-        start_year=period_start
-    )
-
-    if not df_analysis.empty:
-        df_analysis = df_analysis.sort_values("Année").copy()
-        df_analysis["Variation absolue"] = df_analysis["Valeur"].diff()
-        df_analysis["Variation (%)"] = (
-            df_analysis["Valeur"].pct_change() * 100
-        )
-
-        latest = df_analysis.iloc[-1]
-
-        st.markdown("### Résultats descriptifs")
-
-        a, b, c = st.columns(3)
-
-        with a:
-            st.metric(
-                "Dernière valeur",
-                format_value(float(latest["Valeur"]), info["unit"])
-            )
-
-        with b:
-            variation = latest["Variation absolue"]
-            st.metric(
-                "Variation absolue",
-                "N/D" if pd.isna(variation) else f"{variation:,.3f}"
-            )
-
-        with c:
-            pct = latest["Variation (%)"]
-            st.metric(
-                "Variation relative",
-                "N/D" if pd.isna(pct) else f"{pct:,.2f} %"
-            )
-
-        fig = px.line(
-            df_analysis,
-            x="Année",
-            y="Valeur",
-            markers=True,
-            title=f"{indicator_name} — {country_name}"
-        )
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-
-        # Signal descriptif sur la variation récente
-        pct = latest["Variation (%)"]
-
-        st.markdown("### Signal descriptif")
-
-        if pd.isna(pct):
-            st.info(
-                "Pas assez de données successives pour calculer "
-                "la variation récente."
-            )
-        elif pct >= 5:
-            st.success(
-                f"Variation positive de {pct:.2f} %. "
-                "Il s'agit d'une hausse observée ; son interprétation "
-                "économique dépend de la nature de l'indicateur."
-            )
-        elif pct <= -5:
-            st.warning(
-                f"Variation négative de {pct:.2f} %. "
-                "Cette baisse mérite une analyse du contexte économique "
-                "et des autres indicateurs."
-            )
-        else:
-            st.info(
-                f"Variation récente de {pct:.2f} %. "
-                "La variation reste comprise entre -5 % et +5 %."
-            )
-
-        st.markdown("### Tableau d'analyse")
-
-        st.dataframe(
-            df_analysis,
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.download_button(
-            "⬇️ Télécharger l'analyse",
-            data=df_analysis.to_csv(index=False).encode("utf-8-sig"),
-            file_name="analyse_economique.csv",
-            mime="text/csv"
-        )
-
-        st.caption(
-            "Une variation n'est pas automatiquement une opportunité "
-            "ou un risque. Il faut tenir compte du contexte, de la "
-            "qualité des données et d'autres variables économiques."
-        )
-    else:
-        st.warning(
-            "Données indisponibles pour cette série. "
-            "Essaie un autre indicateur."
-        )
 
 # =========================================================
-# PAGE 10: SOURCES & METHODOLOGY
+# 8. SOURCES ET MÉTHODOLOGIE
 # =========================================================
 
-elif page == "Sources & méthodologie":
-    st.markdown("## 📚 Sources & méthodologie")
+else:
+    st.subheader("Sources & méthodologie")
 
-    st.markdown("### Sources institutionnelles")
-    show_source_links(OTHER_SOURCES)
-
-    st.markdown("### Marchés financiers")
-    show_source_links(MARKET_SOURCES)
-
-    st.markdown("### Banques centrales")
-    show_source_links(CENTRAL_BANKS)
-
-    st.markdown("### Méthodologie")
+    st.markdown("### Comment lire les données")
 
     st.markdown("""
-    **1. Données économiques**
-
-    Les séries de la Banque mondiale sont récupérées depuis son API
-    publique. Les valeurs nulles sont exclues des séries affichées.
-    La dernière observation disponible n'est pas nécessairement celle
-    de l'année en cours.
-
-    **2. Comparaison internationale**
-
-    Les comparaisons utilisent les observations disponibles par pays.
-    Les années de référence peuvent différer : il faut vérifier l'année
-    avant de conclure qu'un pays dépasse un autre.
-
-    **3. Marchés et politique monétaire**
-
-    Les liens donnent accès aux sources officielles. Les cotations
-    boursières en direct, les taux directeurs actuels et les actualités
-    ne sont pas considérés comme intégrés automatiquement sans connexion
-    à une API ou récupération vérifiée.
-
-    **4. Analyse**
-
-    Les variations sont des calculs descriptifs effectués à partir
-    des observations récupérées. Elles ne constituent ni une preuve
-    de causalité ni une prévision certaine.
-
-    **5. Transparence**
-
-    Aucune donnée manquante n'est remplacée par une valeur inventée.
-    Les résultats doivent être interprétés selon la source, la période,
-    l'unité et la définition de chaque indicateur.
+    - **Données macroéconomiques :** API publique de la Banque mondiale.
+    - **Fréquence :** annuelle pour les indicateurs affichés ici.
+    - **Dernière observation :** dernière valeur non manquante renvoyée
+      par la source, pas nécessairement l’année courante.
+    - **Mise à jour :** mise en cache pendant 24 heures dans l’application ;
+      les organismes peuvent réviser les séries.
+    - **Marchés, taux et matières premières :** liens vers les sources officielles ;
+      aucun cours en direct n’est simulé.
+    - **Analyse :** les écarts observés ne démontrent pas une relation de cause à effet.
     """)
 
-    st.markdown("### Dernière actualisation de l'application")
-    st.write(datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    st.markdown("### Sources principales")
+
+    sources = [
+        ("Banque mondiale — données", "https://data.worldbank.org/"),
+        ("API Banque mondiale", "https://api.worldbank.org/v2/"),
+        ("HCP Maroc", "https://www.hcp.ma/"),
+        ("Base statistique HCP", "https://bds.hcp.ma/"),
+        ("Bank Al-Maghrib", "https://www.bkam.ma/"),
+        ("Office des Changes", "https://www.oc.gov.ma/"),
+        ("Bourse de Casablanca", "https://www.casablanca-bourse.com/"),
+        ("AMMC", "https://www.ammc.ma/"),
+    ]
+
+    for name, url in sources:
+        st.markdown(f"- [{name}]({url})")
+
     st.caption(
-        "Cette heure indique l'affichage de la page, pas l'heure "
-        "de publication de chaque statistique."
+        "Session consultée le "
+        f"{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}."
     )
 
+
 # =========================================================
-# FOOTER
+# PIED DE PAGE
 # =========================================================
 
-st.markdown("---")
+st.divider()
 
 st.markdown(
     """
-    <div style="display:flex;justify-content:space-between;
-    gap:12px;flex-wrap:wrap;color:#98a9c5;font-size:12px;">
-        <span>🌐 Strategic Radar Maroc</span>
-        <span>Veille → Données → Analyse → Décision</span>
-        <span>Prototype académique</span>
+    <div class="small-muted">
+        🌐 Strategic Radar Maroc · Prototype académique
+        · Veille → Données → Comparaison → Décision
     </div>
     """,
-    unsafe_allow_html=True
+    unsafe_allow_html=True,
 )
